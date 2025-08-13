@@ -4,7 +4,7 @@ import (
 	"context"
 	"log"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/labstack/echo/v4"
 	"github.com/tech-arch1tect/brx/config"
 	"github.com/tech-arch1tect/brx/internal/options"
 	"github.com/tech-arch1tect/brx/server"
@@ -53,22 +53,22 @@ func (a *App) Stop() {
 	}
 }
 
-func (a *App) Get(path string, handler fiber.Handler) {
+func (a *App) Get(path string, handler echo.HandlerFunc) {
 	a.server.Get(path, handler)
 }
 
-func (a *App) Post(path string, handler fiber.Handler) {
+func (a *App) Post(path string, handler echo.HandlerFunc) {
 	a.server.Post(path, handler)
 }
 
-func (a *App) Put(path string, handler fiber.Handler) {
+func (a *App) Put(path string, handler echo.HandlerFunc) {
 	a.server.Put(path, handler)
 }
 
-func (a *App) Delete(path string, handler fiber.Handler) {
+func (a *App) Delete(path string, handler echo.HandlerFunc) {
 	a.server.Delete(path, handler)
 }
 
-func (a *App) Patch(path string, handler fiber.Handler) {
+func (a *App) Patch(path string, handler echo.HandlerFunc) {
 	a.server.Patch(path, handler)
 }

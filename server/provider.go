@@ -24,5 +24,5 @@ func NewProvider() fx.Option {
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
-	return s.fiber.ShutdownWithContext(ctx)
+	return s.echo.Shutdown(ctx)
 }
