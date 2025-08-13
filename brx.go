@@ -19,3 +19,7 @@ func WithConfig(cfg *config.Config) options.Option {
 func WithTemplates() options.Option {
 	return options.WithTemplates()
 }
+
+func WithInertia() options.Option {
+	return options.WithInertia()
+}

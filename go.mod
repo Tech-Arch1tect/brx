@@ -6,6 +6,7 @@ require (
 	github.com/caarlos0/env/v10 v10.0.0
 	github.com/joho/godotenv v1.5.1
 	github.com/labstack/echo/v4 v4.13.4
+	github.com/romsar/gonertia/v2 v2.0.6
 	go.uber.org/fx v1.24.0
 )
 

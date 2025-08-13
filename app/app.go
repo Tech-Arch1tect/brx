@@ -8,13 +8,15 @@ import (
 	"github.com/tech-arch1tect/brx/config"
 	"github.com/tech-arch1tect/brx/internal/options"
 	"github.com/tech-arch1tect/brx/server"
+	"github.com/tech-arch1tect/brx/services/inertia"
 	"github.com/tech-arch1tect/brx/services/templates"
 	"go.uber.org/fx"
 )
 
 type App struct {
-	server *server.Server
-	fx     *fx.App
+	server     *server.Server
+	fx         *fx.App
+	inertiaSvc *inertia.Service
 }
 
 func New(opts ...options.Option) *App {
@@ -44,6 +46,11 @@ func New(opts ...options.Option) *App {
 		}
 	}
 
+	var inertiaSvc *inertia.Service
+	if appOpts.EnableInertia {
+		inertiaSvc = inertia.New(&cfg.Inertia)
+	}
+
 	var fxOptions []fx.Option
 	fxOptions = append(fxOptions, fx.Supply(cfg))
 	fxOptions = append(fxOptions, fx.Supply(srv))
@@ -54,6 +61,33 @@ func New(opts ...options.Option) *App {
 			lc.Append(fx.Hook{
 				OnStart: func(ctx context.Context) error {
 					return svc.LoadTemplates()
+				},
+			})
+		}))
+	}
+
+	if inertiaSvc != nil {
+		fxOptions = append(fxOptions, fx.Supply(inertiaSvc))
+		fxOptions = append(fxOptions, fx.Invoke(func(lc fx.Lifecycle, svc *inertia.Service, cfg *config.Config) {
+			lc.Append(fx.Hook{
+				OnStart: func(ctx context.Context) error {
+					rootViewPath := cfg.Inertia.RootView
+					if rootViewPath == "" {
+						rootViewPath = "app.html"
+					}
+
+					if err := svc.InitializeFromFile(rootViewPath); err != nil {
+						return err
+					}
+
+					if !cfg.Inertia.Development {
+						if err := svc.LoadManifest("public/build/.vite/manifest.json"); err != nil {
+							log.Printf("Warning: Could not load Vite manifest: %v", err)
+						}
+					}
+
+					svc.ShareAssetData()
+					return nil
 				},
 			})
 		}))
@@ -76,8 +110,9 @@ func New(opts ...options.Option) *App {
 	fxApp := fx.New(fxOptions...)
 
 	return &App{
-		server: srv,
-		fx:     fxApp,
+		server:     srv,
+		fx:         fxApp,
+		inertiaSvc: inertiaSvc,
 	}
 }
 
@@ -113,4 +148,8 @@ func (a *App) Delete(path string, handler echo.HandlerFunc) {
 
 func (a *App) Patch(path string, handler echo.HandlerFunc) {
 	a.server.Patch(path, handler)
+}
+
+func (a *App) InertiaService() *inertia.Service {
+	return a.inertiaSvc
 }

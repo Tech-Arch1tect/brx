@@ -11,6 +11,7 @@ type Config struct {
 	Server    ServerConfig    `envPrefix:"BRX_SERVER_"`
 	Log       LogConfig       `envPrefix:"BRX_LOG_"`
 	Templates TemplatesConfig `envPrefix:"BRX_TEMPLATES_"`
+	Inertia   InertiaConfig   `envPrefix:"BRX_INERTIA_"`
 }
 
 type ServerConfig struct {
@@ -26,6 +27,15 @@ type TemplatesConfig struct {
 	Enabled     bool   `env:"ENABLED" envDefault:"false"`
 	Dir         string `env:"DIR" envDefault:"templates"`
 	Extension   string `env:"EXTENSION" envDefault:".html"`
+	Development bool   `env:"DEVELOPMENT" envDefault:"false"`
+}
+
+type InertiaConfig struct {
+	Enabled     bool   `env:"ENABLED" envDefault:"false"`
+	RootView    string `env:"ROOT_VIEW" envDefault:"app.html"`
+	Version     string `env:"VERSION"`
+	SSREnabled  bool   `env:"SSR_ENABLED" envDefault:"false"`
+	SSRURL      string `env:"SSR_URL" envDefault:"http://127.0.0.1:13714"`
 	Development bool   `env:"DEVELOPMENT" envDefault:"false"`
 }
 
