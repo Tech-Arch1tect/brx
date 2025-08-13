@@ -23,3 +23,11 @@ func WithTemplates() options.Option {
 func WithInertia() options.Option {
 	return options.WithInertia()
 }
+
+func WithDatabase(models ...any) options.Option {
+	return options.WithDatabase(models...)
+}
+
+func WithFxOptions(fxOpts ...any) options.Option {
+	return options.WithFxOptions(fxOpts...)
+}

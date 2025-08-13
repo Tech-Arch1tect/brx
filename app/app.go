@@ -6,17 +6,20 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/tech-arch1tect/brx/config"
+	"github.com/tech-arch1tect/brx/database"
 	"github.com/tech-arch1tect/brx/internal/options"
 	"github.com/tech-arch1tect/brx/server"
 	"github.com/tech-arch1tect/brx/services/inertia"
 	"github.com/tech-arch1tect/brx/services/templates"
 	"go.uber.org/fx"
+	"gorm.io/gorm"
 )
 
 type App struct {
 	server     *server.Server
 	fx         *fx.App
 	inertiaSvc *inertia.Service
+	db         *gorm.DB
 }
 
 func New(opts ...options.Option) *App {
@@ -51,9 +54,27 @@ func New(opts ...options.Option) *App {
 		inertiaSvc = inertia.New(&cfg.Inertia)
 	}
 
+	var db *gorm.DB
+	if appOpts.EnableDatabase {
+		modelsOpt := &database.ModelsOption{}
+		if len(appOpts.DatabaseModels) > 0 {
+			modelsOpt = database.WithModels(appOpts.DatabaseModels...)
+		}
+
+		var err error
+		db, err = database.ProvideDatabase(*cfg, modelsOpt)
+		if err != nil {
+			panic(err)
+		}
+	}
+
 	var fxOptions []fx.Option
 	fxOptions = append(fxOptions, fx.Supply(cfg))
 	fxOptions = append(fxOptions, fx.Supply(srv))
+
+	if db != nil {
+		fxOptions = append(fxOptions, fx.Supply(db))
+	}
 
 	if templateSvc != nil {
 		fxOptions = append(fxOptions, fx.Supply(templateSvc))
@@ -105,6 +126,12 @@ func New(opts ...options.Option) *App {
 		})
 	}))
 
+	for _, opt := range appOpts.ExtraFxOptions {
+		if fxOpt, ok := opt.(fx.Option); ok {
+			fxOptions = append(fxOptions, fxOpt)
+		}
+	}
+
 	fxOptions = append(fxOptions, fx.NopLogger)
 
 	fxApp := fx.New(fxOptions...)
@@ -113,6 +140,7 @@ func New(opts ...options.Option) *App {
 		server:     srv,
 		fx:         fxApp,
 		inertiaSvc: inertiaSvc,
+		db:         db,
 	}
 }
 
@@ -148,6 +176,14 @@ func (a *App) Delete(path string, handler echo.HandlerFunc) {
 
 func (a *App) Patch(path string, handler echo.HandlerFunc) {
 	a.server.Patch(path, handler)
+}
+
+func (a *App) Run() {
+	a.Start()
+}
+
+func (a *App) DB() *gorm.DB {
+	return a.db
 }
 
 func (a *App) InertiaService() *inertia.Service {

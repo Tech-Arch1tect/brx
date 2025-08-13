@@ -12,6 +12,7 @@ type Config struct {
 	Log       LogConfig       `envPrefix:"BRX_LOG_"`
 	Templates TemplatesConfig `envPrefix:"BRX_TEMPLATES_"`
 	Inertia   InertiaConfig   `envPrefix:"BRX_INERTIA_"`
+	Database  DatabaseConfig  `envPrefix:"BRX_DATABASE_"`
 }
 
 type ServerConfig struct {
@@ -37,6 +38,12 @@ type InertiaConfig struct {
 	SSREnabled  bool   `env:"SSR_ENABLED" envDefault:"false"`
 	SSRURL      string `env:"SSR_URL" envDefault:"http://127.0.0.1:13714"`
 	Development bool   `env:"DEVELOPMENT" envDefault:"false"`
+}
+
+type DatabaseConfig struct {
+	Driver      string `env:"DRIVER" envDefault:"sqlite"`
+	DSN         string `env:"DSN" envDefault:"app.db"`
+	AutoMigrate bool   `env:"AUTO_MIGRATE" envDefault:"true"`
 }
 
 func LoadConfig(cfg any) error {

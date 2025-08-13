@@ -52,6 +52,10 @@ func (s *Server) Patch(path string, handler echo.HandlerFunc) {
 	s.echo.PATCH(path, handler)
 }
 
+func (s *Server) Group(prefix string) *echo.Group {
+	return s.echo.Group(prefix)
+}
+
 func (s *Server) SetRenderer(renderer echo.Renderer) {
 	s.echo.Renderer = renderer
 }

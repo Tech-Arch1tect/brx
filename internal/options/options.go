@@ -6,6 +6,9 @@ type Options struct {
 	Config          *config.Config
 	EnableTemplates bool
 	EnableInertia   bool
+	EnableDatabase  bool
+	DatabaseModels  []any
+	ExtraFxOptions  []any
 }
 
 type Option func(*Options)
@@ -25,5 +28,18 @@ func WithTemplates() Option {
 func WithInertia() Option {
 	return func(opts *Options) {
 		opts.EnableInertia = true
+	}
+}
+
+func WithDatabase(models ...any) Option {
+	return func(opts *Options) {
+		opts.EnableDatabase = true
+		opts.DatabaseModels = models
+	}
+}
+
+func WithFxOptions(fxOpts ...any) Option {
+	return func(opts *Options) {
+		opts.ExtraFxOptions = append(opts.ExtraFxOptions, fxOpts...)
 	}
 }
