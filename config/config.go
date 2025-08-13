@@ -8,8 +8,9 @@ import (
 )
 
 type Config struct {
-	Server ServerConfig `envPrefix:"BRX_SERVER_"`
-	Log    LogConfig    `envPrefix:"BRX_LOG_"`
+	Server    ServerConfig    `envPrefix:"BRX_SERVER_"`
+	Log       LogConfig       `envPrefix:"BRX_LOG_"`
+	Templates TemplatesConfig `envPrefix:"BRX_TEMPLATES_"`
 }
 
 type ServerConfig struct {
@@ -19,6 +20,13 @@ type ServerConfig struct {
 
 type LogConfig struct {
 	Level string `env:"LEVEL" envDefault:"info"`
+}
+
+type TemplatesConfig struct {
+	Enabled     bool   `env:"ENABLED" envDefault:"false"`
+	Dir         string `env:"DIR" envDefault:"templates"`
+	Extension   string `env:"EXTENSION" envDefault:".html"`
+	Development bool   `env:"DEVELOPMENT" envDefault:"false"`
 }
 
 func LoadConfig(cfg any) error {

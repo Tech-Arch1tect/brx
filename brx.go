@@ -15,3 +15,7 @@ func New(opts ...options.Option) *App {
 func WithConfig(cfg *config.Config) options.Option {
 	return options.WithConfig(cfg)
 }
+
+func WithTemplates() options.Option {
+	return options.WithTemplates()
+}

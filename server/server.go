@@ -51,3 +51,7 @@ func (s *Server) Delete(path string, handler echo.HandlerFunc) {
 func (s *Server) Patch(path string, handler echo.HandlerFunc) {
 	s.echo.PATCH(path, handler)
 }
+
+func (s *Server) SetRenderer(renderer echo.Renderer) {
+	s.echo.Renderer = renderer
+}

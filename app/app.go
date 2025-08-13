@@ -8,6 +8,7 @@ import (
 	"github.com/tech-arch1tect/brx/config"
 	"github.com/tech-arch1tect/brx/internal/options"
 	"github.com/tech-arch1tect/brx/server"
+	"github.com/tech-arch1tect/brx/services/templates"
 	"go.uber.org/fx"
 )
 
@@ -23,13 +24,54 @@ func New(opts ...options.Option) *App {
 		opt(appOpts)
 	}
 
-	var fxOptions []fx.Option
-	fxOptions = append(fxOptions, config.NewProvider(appOpts.Config))
-	fxOptions = append(fxOptions, server.NewProvider())
-	fxOptions = append(fxOptions, fx.NopLogger)
+	var cfg *config.Config
+	if appOpts.Config != nil {
+		cfg = appOpts.Config
+	} else {
+		cfg = &config.Config{}
+		if err := config.LoadConfig(cfg); err != nil {
+			panic(err)
+		}
+	}
 
-	var srv *server.Server
-	fxOptions = append(fxOptions, fx.Populate(&srv))
+	srv := server.New(cfg)
+
+	var templateSvc *templates.Service
+	if appOpts.EnableTemplates {
+		templateSvc = templates.New(&cfg.Templates)
+		if templateSvc != nil {
+			srv.SetRenderer(templateSvc.Renderer())
+		}
+	}
+
+	var fxOptions []fx.Option
+	fxOptions = append(fxOptions, fx.Supply(cfg))
+	fxOptions = append(fxOptions, fx.Supply(srv))
+
+	if templateSvc != nil {
+		fxOptions = append(fxOptions, fx.Supply(templateSvc))
+		fxOptions = append(fxOptions, fx.Invoke(func(lc fx.Lifecycle, svc *templates.Service) {
+			lc.Append(fx.Hook{
+				OnStart: func(ctx context.Context) error {
+					return svc.LoadTemplates()
+				},
+			})
+		}))
+	}
+
+	fxOptions = append(fxOptions, fx.Invoke(func(lc fx.Lifecycle, srv *server.Server) {
+		lc.Append(fx.Hook{
+			OnStart: func(ctx context.Context) error {
+				go srv.Start()
+				return nil
+			},
+			OnStop: func(ctx context.Context) error {
+				return srv.Shutdown(ctx)
+			},
+		})
+	}))
+
+	fxOptions = append(fxOptions, fx.NopLogger)
 
 	fxApp := fx.New(fxOptions...)
 
