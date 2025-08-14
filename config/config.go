@@ -16,11 +16,13 @@ type Config struct {
 	Database  DatabaseConfig  `envPrefix:"BRX_DATABASE_"`
 	Session   SessionConfig   `envPrefix:"BRX_SESSION_"`
 	Auth      AuthConfig      `envPrefix:"BRX_AUTH_"`
+	RateLimit RateLimitConfig `envPrefix:"BRX_RATELIMIT_"`
 }
 
 type ServerConfig struct {
-	Port string `env:"PORT" envDefault:"8080"`
-	Host string `env:"HOST" envDefault:"localhost"`
+	Port           string   `env:"PORT" envDefault:"8080"`
+	Host           string   `env:"HOST" envDefault:"localhost"`
+	TrustedProxies []string `env:"TRUSTED_PROXIES" envSeparator:","`
 }
 
 type LogConfig struct {
@@ -69,6 +71,18 @@ type AuthConfig struct {
 	RequireSpecial bool `env:"REQUIRE_SPECIAL" envDefault:"false"`
 	BcryptCost     int  `env:"BCRYPT_COST" envDefault:"10"`
 }
+
+type RateLimitConfig struct {
+	Store string `env:"STORE" envDefault:"memory"`
+}
+
+type CountingMode string
+
+const (
+	CountAll      CountingMode = "all"
+	CountFailures CountingMode = "failures"
+	CountSuccess  CountingMode = "success"
+)
 
 func LoadConfig(cfg any) error {
 	if err := godotenv.Load(); err != nil {

@@ -8,6 +8,7 @@ import (
 	"github.com/tech-arch1tect/brx/config"
 	"github.com/tech-arch1tect/brx/database"
 	"github.com/tech-arch1tect/brx/internal/options"
+	"github.com/tech-arch1tect/brx/middleware/ratelimit"
 	"github.com/tech-arch1tect/brx/server"
 	"github.com/tech-arch1tect/brx/services/auth"
 	"github.com/tech-arch1tect/brx/services/inertia"
@@ -157,6 +158,8 @@ func New(opts ...options.Option) *App {
 	if appOpts.EnableAuth {
 		fxOptions = append(fxOptions, auth.Module)
 	}
+
+	fxOptions = append(fxOptions, fx.Provide(ratelimit.ProvideRateLimitStore))
 
 	for _, opt := range appOpts.ExtraFxOptions {
 		if fxOpt, ok := opt.(fx.Option); ok {
