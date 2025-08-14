@@ -15,6 +15,7 @@ type Config struct {
 	Inertia   InertiaConfig   `envPrefix:"BRX_INERTIA_"`
 	Database  DatabaseConfig  `envPrefix:"BRX_DATABASE_"`
 	Session   SessionConfig   `envPrefix:"BRX_SESSION_"`
+	Auth      AuthConfig      `envPrefix:"BRX_AUTH_"`
 }
 
 type ServerConfig struct {
@@ -58,6 +59,15 @@ type SessionConfig struct {
 	SameSite string        `env:"SAME_SITE" envDefault:"lax"`
 	Path     string        `env:"PATH" envDefault:"/"`
 	Domain   string        `env:"DOMAIN" envDefault:""`
+}
+
+type AuthConfig struct {
+	MinLength      int  `env:"MIN_LENGTH" envDefault:"8"`
+	RequireUpper   bool `env:"REQUIRE_UPPER" envDefault:"true"`
+	RequireLower   bool `env:"REQUIRE_LOWER" envDefault:"true"`
+	RequireNumber  bool `env:"REQUIRE_NUMBER" envDefault:"true"`
+	RequireSpecial bool `env:"REQUIRE_SPECIAL" envDefault:"false"`
+	BcryptCost     int  `env:"BCRYPT_COST" envDefault:"10"`
 }
 
 func LoadConfig(cfg any) error {

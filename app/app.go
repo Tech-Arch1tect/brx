@@ -9,6 +9,7 @@ import (
 	"github.com/tech-arch1tect/brx/database"
 	"github.com/tech-arch1tect/brx/internal/options"
 	"github.com/tech-arch1tect/brx/server"
+	"github.com/tech-arch1tect/brx/services/auth"
 	"github.com/tech-arch1tect/brx/services/inertia"
 	"github.com/tech-arch1tect/brx/services/templates"
 	"github.com/tech-arch1tect/brx/session"
@@ -151,6 +152,10 @@ func New(opts ...options.Option) *App {
 		fxOptions = append(fxOptions, fx.Invoke(func(srv *server.Server, inertiaSvc *inertia.Service) {
 			srv.Echo().Use(inertiaSvc.Middleware())
 		}))
+	}
+
+	if appOpts.EnableAuth {
+		fxOptions = append(fxOptions, auth.Module)
 	}
 
 	for _, opt := range appOpts.ExtraFxOptions {

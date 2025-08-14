@@ -13,6 +13,7 @@ type Options struct {
 	DatabaseModels  []any
 	EnableSessions  bool
 	SessionOptions  *session.Options
+	EnableAuth      bool
 	ExtraFxOptions  []any
 }
 
@@ -49,6 +50,12 @@ func WithSessions(sessionOpts ...*session.Options) Option {
 		if len(sessionOpts) > 0 {
 			opts.SessionOptions = sessionOpts[0]
 		}
+	}
+}
+
+func WithAuth() Option {
+	return func(opts *Options) {
+		opts.EnableAuth = true
 	}
 }
 

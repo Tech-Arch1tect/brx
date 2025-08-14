@@ -33,6 +33,10 @@ func WithSessions(sessionOpts ...*session.Options) options.Option {
 	return options.WithSessions(sessionOpts...)
 }
 
+func WithAuth() options.Option {
+	return options.WithAuth()
+}
+
 func WithFxOptions(fxOpts ...any) options.Option {
 	return options.WithFxOptions(fxOpts...)
 }
