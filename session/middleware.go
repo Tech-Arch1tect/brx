@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -25,7 +26,9 @@ func Middleware(manager *Manager) echo.MiddlewareFunc {
 			}
 
 			handler := manager.SessionManager.LoadAndSave(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				c.SetRequest(r)
+
+				ctx := context.WithValue(r.Context(), sessionManagerKey, manager)
+				c.SetRequest(r.WithContext(ctx))
 				c.Response().Writer = w
 				handlerErr = next(c)
 			}))
@@ -51,12 +54,21 @@ func (w *responseWriterWrapper) Write(b []byte) (int, error) {
 }
 
 func (w *responseWriterWrapper) WriteHeader(statusCode int) {
-	w.echo.Status = statusCode
+	if w.echo.Status == 0 {
+		w.echo.Status = statusCode
+	}
 	w.ResponseWriter.WriteHeader(statusCode)
 }
 
 func GetManager(c echo.Context) *Manager {
 	if manager := c.Get(sessionManagerKey); manager != nil {
+		return manager.(*Manager)
+	}
+	return nil
+}
+
+func GetManagerFromContext(ctx context.Context) *Manager {
+	if manager := ctx.Value(sessionManagerKey); manager != nil {
 		return manager.(*Manager)
 	}
 	return nil

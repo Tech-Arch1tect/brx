@@ -141,6 +141,18 @@ func New(opts ...options.Option) *App {
 		})
 	}))
 
+	if sessionMgr != nil {
+		fxOptions = append(fxOptions, fx.Invoke(func(srv *server.Server, sessionMgr *session.Manager) {
+			srv.Echo().Use(session.Middleware(sessionMgr))
+		}))
+	}
+
+	if inertiaSvc != nil {
+		fxOptions = append(fxOptions, fx.Invoke(func(srv *server.Server, inertiaSvc *inertia.Service) {
+			srv.Echo().Use(inertiaSvc.Middleware())
+		}))
+	}
+
 	for _, opt := range appOpts.ExtraFxOptions {
 		if fxOpt, ok := opt.(fx.Option); ok {
 			fxOptions = append(fxOptions, fxOpt)

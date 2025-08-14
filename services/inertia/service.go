@@ -52,6 +52,8 @@ func (s *Service) InitializeFromFile(rootViewPath string) error {
 		}
 	}
 
+	options = append(options, gonertia.WithFlashProvider(NewSCSFlashProvider()))
+
 	inertiaInstance, err := gonertia.NewFromFile(rootViewPath, options...)
 	if err != nil {
 		return err
@@ -84,6 +86,8 @@ func (s *Service) InitializeFromFS(fs embed.FS, rootViewPath string) error {
 		}
 	}
 
+	options = append(options, gonertia.WithFlashProvider(NewSCSFlashProvider()))
+
 	inertiaInstance, err := gonertia.NewFromFileFS(fs, rootViewPath, options...)
 	if err != nil {
 		return err
@@ -102,6 +106,7 @@ func (s *Service) Middleware() echo.MiddlewareFunc {
 		return func(c echo.Context) error {
 			handler := s.inertia.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				c.SetRequest(r)
+
 				if err := next(c); err != nil {
 					c.Error(err)
 				}
@@ -117,6 +122,7 @@ func (s *Service) Render(c echo.Context, component string, props gonertia.Props)
 	if s.inertia == nil {
 		return fmt.Errorf("inertia instance is nil")
 	}
+
 	return s.inertia.Render(c.Response(), c.Request(), component, props)
 }
 
