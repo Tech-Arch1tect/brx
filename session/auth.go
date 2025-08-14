@@ -113,6 +113,17 @@ func RequireAuth() echo.MiddlewareFunc {
 	}
 }
 
+func RequireAuthWeb(loginURL string) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			if !IsAuthenticated(c) {
+				return c.Redirect(302, loginURL)
+			}
+			return next(c)
+		}
+	}
+}
+
 func SetFlash(c echo.Context, message string) {
 	manager := GetManager(c)
 	if manager == nil {
