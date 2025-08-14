@@ -2,6 +2,7 @@ package config
 
 import (
 	"log"
+	"time"
 
 	"github.com/caarlos0/env/v10"
 	"github.com/joho/godotenv"
@@ -13,6 +14,7 @@ type Config struct {
 	Templates TemplatesConfig `envPrefix:"BRX_TEMPLATES_"`
 	Inertia   InertiaConfig   `envPrefix:"BRX_INERTIA_"`
 	Database  DatabaseConfig  `envPrefix:"BRX_DATABASE_"`
+	Session   SessionConfig   `envPrefix:"BRX_SESSION_"`
 }
 
 type ServerConfig struct {
@@ -44,6 +46,18 @@ type DatabaseConfig struct {
 	Driver      string `env:"DRIVER" envDefault:"sqlite"`
 	DSN         string `env:"DSN" envDefault:"app.db"`
 	AutoMigrate bool   `env:"AUTO_MIGRATE" envDefault:"true"`
+}
+
+type SessionConfig struct {
+	Enabled  bool          `env:"ENABLED" envDefault:"false"`
+	Store    string        `env:"STORE" envDefault:"memory"`
+	Name     string        `env:"NAME" envDefault:"brx-session"`
+	MaxAge   time.Duration `env:"MAX_AGE" envDefault:"24h"`
+	Secure   bool          `env:"SECURE" envDefault:"false"`
+	HttpOnly bool          `env:"HTTP_ONLY" envDefault:"true"`
+	SameSite string        `env:"SAME_SITE" envDefault:"lax"`
+	Path     string        `env:"PATH" envDefault:"/"`
+	Domain   string        `env:"DOMAIN" envDefault:""`
 }
 
 func LoadConfig(cfg any) error {

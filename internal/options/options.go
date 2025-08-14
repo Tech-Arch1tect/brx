@@ -1,6 +1,9 @@
 package options
 
-import "github.com/tech-arch1tect/brx/config"
+import (
+	"github.com/tech-arch1tect/brx/config"
+	"github.com/tech-arch1tect/brx/session"
+)
 
 type Options struct {
 	Config          *config.Config
@@ -8,6 +11,8 @@ type Options struct {
 	EnableInertia   bool
 	EnableDatabase  bool
 	DatabaseModels  []any
+	EnableSessions  bool
+	SessionOptions  *session.Options
 	ExtraFxOptions  []any
 }
 
@@ -35,6 +40,15 @@ func WithDatabase(models ...any) Option {
 	return func(opts *Options) {
 		opts.EnableDatabase = true
 		opts.DatabaseModels = models
+	}
+}
+
+func WithSessions(sessionOpts ...*session.Options) Option {
+	return func(opts *Options) {
+		opts.EnableSessions = true
+		if len(sessionOpts) > 0 {
+			opts.SessionOptions = sessionOpts[0]
+		}
 	}
 }
 

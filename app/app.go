@@ -11,6 +11,7 @@ import (
 	"github.com/tech-arch1tect/brx/server"
 	"github.com/tech-arch1tect/brx/services/inertia"
 	"github.com/tech-arch1tect/brx/services/templates"
+	"github.com/tech-arch1tect/brx/session"
 	"go.uber.org/fx"
 	"gorm.io/gorm"
 )
@@ -20,6 +21,7 @@ type App struct {
 	fx         *fx.App
 	inertiaSvc *inertia.Service
 	db         *gorm.DB
+	sessionMgr *session.Manager
 }
 
 func New(opts ...options.Option) *App {
@@ -68,12 +70,25 @@ func New(opts ...options.Option) *App {
 		}
 	}
 
+	var sessionMgr *session.Manager
+	if appOpts.EnableSessions {
+		var err error
+		sessionMgr, err = session.ProvideSessionManager(*cfg, appOpts.SessionOptions, db)
+		if err != nil {
+			panic(err)
+		}
+	}
+
 	var fxOptions []fx.Option
 	fxOptions = append(fxOptions, fx.Supply(cfg))
 	fxOptions = append(fxOptions, fx.Supply(srv))
 
 	if db != nil {
 		fxOptions = append(fxOptions, fx.Supply(db))
+	}
+
+	if sessionMgr != nil {
+		fxOptions = append(fxOptions, fx.Supply(sessionMgr))
 	}
 
 	if templateSvc != nil {
@@ -141,6 +156,7 @@ func New(opts ...options.Option) *App {
 		fx:         fxApp,
 		inertiaSvc: inertiaSvc,
 		db:         db,
+		sessionMgr: sessionMgr,
 	}
 }
 

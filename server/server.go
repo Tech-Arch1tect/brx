@@ -59,3 +59,7 @@ func (s *Server) Group(prefix string) *echo.Group {
 func (s *Server) SetRenderer(renderer echo.Renderer) {
 	s.echo.Renderer = renderer
 }
+
+func (s *Server) Echo() *echo.Echo {
+	return s.echo
+}

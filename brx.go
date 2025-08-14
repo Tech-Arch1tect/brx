@@ -4,6 +4,7 @@ import (
 	"github.com/tech-arch1tect/brx/app"
 	"github.com/tech-arch1tect/brx/config"
 	"github.com/tech-arch1tect/brx/internal/options"
+	"github.com/tech-arch1tect/brx/session"
 )
 
 type App = app.App
@@ -26,6 +27,10 @@ func WithInertia() options.Option {
 
 func WithDatabase(models ...any) options.Option {
 	return options.WithDatabase(models...)
+}
+
+func WithSessions(sessionOpts ...*session.Options) options.Option {
+	return options.WithSessions(sessionOpts...)
 }
 
 func WithFxOptions(fxOpts ...any) options.Option {
