@@ -9,10 +9,13 @@ import (
 	"github.com/tech-arch1tect/brx/config"
 	"github.com/tech-arch1tect/brx/database"
 	"github.com/tech-arch1tect/brx/internal/options"
+	"github.com/tech-arch1tect/brx/middleware/csrf"
+	"github.com/tech-arch1tect/brx/middleware/inertiacsrf"
 	"github.com/tech-arch1tect/brx/middleware/ratelimit"
 	"github.com/tech-arch1tect/brx/server"
 	"github.com/tech-arch1tect/brx/services/auth"
 	"github.com/tech-arch1tect/brx/services/inertia"
+	"github.com/tech-arch1tect/brx/services/mail"
 	"github.com/tech-arch1tect/brx/services/templates"
 	"github.com/tech-arch1tect/brx/session"
 	"go.uber.org/fx"
@@ -155,24 +158,18 @@ func New(opts ...options.Option) *App {
 			srv.Echo().Use(inertiaSvc.Middleware())
 
 			if cfg.CSRF.Enabled {
-				srv.Echo().Use(func(next echo.HandlerFunc) echo.HandlerFunc {
-					return func(c echo.Context) error {
-						if c.Request().Header.Get("X-Inertia") == "true" || c.Request().Header.Get("Accept") == "text/html" {
-							if token := c.Get("csrf"); token != nil {
-								ctx := c.Request().Context()
-								ctx = inertiaCSRFContext(ctx, token.(string))
-								c.SetRequest(c.Request().WithContext(ctx))
-							}
-						}
-						return next(c)
-					}
-				})
+				srv.Echo().Use(csrf.WithConfig(&cfg.CSRF))
+				srv.Echo().Use(inertiacsrf.Middleware(cfg))
 			}
 		}))
 	}
 
 	if appOpts.EnableAuth {
 		fxOptions = append(fxOptions, auth.Module)
+	}
+
+	if appOpts.EnableMail {
+		fxOptions = append(fxOptions, mail.Module)
 	}
 
 	fxOptions = append(fxOptions, fx.Provide(ratelimit.ProvideRateLimitStore))
