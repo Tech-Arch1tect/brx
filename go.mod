@@ -1,6 +1,6 @@
 module github.com/tech-arch1tect/brx
 
-go 1.24.2
+go 1.25.0
 
 require (
 	github.com/alexedwards/scs/gormstore v0.0.0-20250417082927-ab20b3feb5e9
