@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/labstack/echo/v4"
+	gonertia "github.com/romsar/gonertia/v2"
 	"github.com/tech-arch1tect/brx/config"
 	"github.com/tech-arch1tect/brx/database"
 	"github.com/tech-arch1tect/brx/internal/options"
@@ -150,8 +151,23 @@ func New(opts ...options.Option) *App {
 	}
 
 	if inertiaSvc != nil {
-		fxOptions = append(fxOptions, fx.Invoke(func(srv *server.Server, inertiaSvc *inertia.Service) {
+		fxOptions = append(fxOptions, fx.Invoke(func(srv *server.Server, inertiaSvc *inertia.Service, cfg *config.Config) {
 			srv.Echo().Use(inertiaSvc.Middleware())
+
+			if cfg.CSRF.Enabled {
+				srv.Echo().Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+					return func(c echo.Context) error {
+						if c.Request().Header.Get("X-Inertia") == "true" || c.Request().Header.Get("Accept") == "text/html" {
+							if token := c.Get("csrf"); token != nil {
+								ctx := c.Request().Context()
+								ctx = inertiaCSRFContext(ctx, token.(string))
+								c.SetRequest(c.Request().WithContext(ctx))
+							}
+						}
+						return next(c)
+					}
+				})
+			}
 		}))
 	}
 
@@ -224,4 +240,8 @@ func (a *App) DB() *gorm.DB {
 
 func (a *App) InertiaService() *inertia.Service {
 	return a.inertiaSvc
+}
+
+func inertiaCSRFContext(ctx context.Context, token string) context.Context {
+	return gonertia.SetProp(ctx, "csrfToken", token)
 }

@@ -17,6 +17,7 @@ type Config struct {
 	Session   SessionConfig   `envPrefix:"BRX_SESSION_"`
 	Auth      AuthConfig      `envPrefix:"BRX_AUTH_"`
 	RateLimit RateLimitConfig `envPrefix:"BRX_RATELIMIT_"`
+	CSRF      CSRFConfig      `envPrefix:"BRX_CSRF_"`
 }
 
 type ServerConfig struct {
@@ -74,6 +75,20 @@ type AuthConfig struct {
 
 type RateLimitConfig struct {
 	Store string `env:"STORE" envDefault:"memory"`
+}
+
+type CSRFConfig struct {
+	Enabled        bool   `env:"ENABLED" envDefault:"false"`
+	TokenLength    uint8  `env:"TOKEN_LENGTH" envDefault:"32"`
+	TokenLookup    string `env:"TOKEN_LOOKUP" envDefault:"header:X-CSRF-Token"`
+	ContextKey     string `env:"CONTEXT_KEY" envDefault:"csrf"`
+	CookieName     string `env:"COOKIE_NAME" envDefault:"_csrf"`
+	CookieDomain   string `env:"COOKIE_DOMAIN" envDefault:""`
+	CookiePath     string `env:"COOKIE_PATH" envDefault:"/"`
+	CookieMaxAge   int    `env:"COOKIE_MAX_AGE" envDefault:"86400"`
+	CookieSecure   bool   `env:"COOKIE_SECURE" envDefault:"false"`
+	CookieHTTPOnly bool   `env:"COOKIE_HTTP_ONLY" envDefault:"false"`
+	CookieSameSite string `env:"COOKIE_SAME_SITE" envDefault:"default"`
 }
 
 type CountingMode string
