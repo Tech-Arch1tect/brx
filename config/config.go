@@ -18,6 +18,7 @@ type Config struct {
 	Auth      AuthConfig      `envPrefix:"BRX_AUTH_"`
 	RateLimit RateLimitConfig `envPrefix:"BRX_RATELIMIT_"`
 	CSRF      CSRFConfig      `envPrefix:"BRX_CSRF_"`
+	Mail      MailConfig      `envPrefix:"BRX_MAIL_"`
 }
 
 type ServerConfig struct {
@@ -89,6 +90,17 @@ type CSRFConfig struct {
 	CookieSecure   bool   `env:"COOKIE_SECURE" envDefault:"false"`
 	CookieHTTPOnly bool   `env:"COOKIE_HTTP_ONLY" envDefault:"false"`
 	CookieSameSite string `env:"COOKIE_SAME_SITE" envDefault:"default"`
+}
+
+type MailConfig struct {
+	Host         string `env:"HOST" envDefault:"localhost"`
+	Port         int    `env:"PORT" envDefault:"587"`
+	Username     string `env:"USERNAME"`
+	Password     string `env:"PASSWORD"`
+	Encryption   string `env:"ENCRYPTION" envDefault:"tls"`
+	FromAddress  string `env:"FROM_ADDRESS"`
+	FromName     string `env:"FROM_NAME"`
+	TemplatesDir string `env:"TEMPLATES_DIR" envDefault:"templates/mail"`
 }
 
 type CountingMode string

@@ -14,6 +14,7 @@ type Options struct {
 	EnableSessions  bool
 	SessionOptions  *session.Options
 	EnableAuth      bool
+	EnableMail      bool
 	ExtraFxOptions  []any
 }
 
@@ -56,6 +57,12 @@ func WithSessions(sessionOpts ...*session.Options) Option {
 func WithAuth() Option {
 	return func(opts *Options) {
 		opts.EnableAuth = true
+	}
+}
+
+func WithMail() Option {
+	return func(opts *Options) {
+		opts.EnableMail = true
 	}
 }
 

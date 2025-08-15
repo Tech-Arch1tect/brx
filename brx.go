@@ -37,6 +37,10 @@ func WithAuth() options.Option {
 	return options.WithAuth()
 }
 
+func WithMail() options.Option {
+	return options.WithMail()
+}
+
 func WithFxOptions(fxOpts ...any) options.Option {
 	return options.WithFxOptions(fxOpts...)
 }
