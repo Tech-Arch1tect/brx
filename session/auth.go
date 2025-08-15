@@ -1,6 +1,8 @@
 package session
 
 import (
+	"time"
+
 	"github.com/labstack/echo/v4"
 )
 
@@ -18,6 +20,20 @@ func Login(c echo.Context, userID any) {
 	ctx := c.Request().Context()
 	manager.Put(ctx, UserIDKey, userID)
 	manager.Put(ctx, AuthenticatedKey, true)
+
+	if service := GetSessionService(c); service != nil {
+		token := manager.Token(ctx)
+		if token != "" {
+			userIDUint := convertToUint(userID)
+			if userIDUint > 0 {
+				ipAddress := c.RealIP()
+				userAgent := c.Request().UserAgent()
+				expiresAt := time.Now().Add(manager.config.MaxAge)
+
+				_ = service.TrackSession(userIDUint, token, ipAddress, userAgent, expiresAt)
+			}
+		}
+	}
 }
 
 func Logout(c echo.Context) {
@@ -174,4 +190,28 @@ func Delete(c echo.Context, key string) {
 	}
 	ctx := c.Request().Context()
 	manager.Remove(ctx, key)
+}
+
+func GetSessionService(c echo.Context) SessionService {
+	if service, ok := c.Get("session_service").(SessionService); ok {
+		return service
+	}
+	return nil
+}
+
+func convertToUint(userID any) uint {
+	switch v := userID.(type) {
+	case uint:
+		return v
+	case int:
+		return uint(v)
+	case int64:
+		return uint(v)
+	case uint64:
+		return uint(v)
+	case float64:
+		return uint(v)
+	default:
+		return 0
+	}
 }

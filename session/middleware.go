@@ -3,11 +3,15 @@ package session
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/labstack/echo/v4"
 )
 
-const sessionManagerKey = "session_manager"
+const (
+	sessionManagerKey = "session_manager"
+	sessionServiceKey = "session_service"
+)
 
 func Middleware(manager *Manager) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
@@ -72,4 +76,40 @@ func GetManagerFromContext(ctx context.Context) *Manager {
 		return manager.(*Manager)
 	}
 	return nil
+}
+
+// SessionServiceMiddleware injects the session service and tracks session usage
+func SessionServiceMiddleware(service SessionService) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			if service != nil {
+				c.Set(sessionServiceKey, service)
+			}
+
+			err := next(c)
+
+			if service != nil && IsAuthenticated(c) {
+				manager := GetManager(c)
+				if manager != nil {
+					token := manager.Token(c.Request().Context())
+					if token != "" {
+						go func() {
+							exists, err := service.SessionExists(token)
+							if err == nil && !exists {
+								userID := convertToUint(GetUserID(c))
+								if userID > 0 {
+									ipAddress := c.RealIP()
+									userAgent := c.Request().UserAgent()
+									expiresAt := time.Now().Add(manager.config.MaxAge)
+									_ = service.TrackSession(userID, token, ipAddress, userAgent, expiresAt)
+								}
+							}
+						}()
+					}
+				}
+			}
+
+			return err
+		}
+	}
 }

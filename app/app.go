@@ -27,7 +27,6 @@ type App struct {
 	fx         *fx.App
 	inertiaSvc *inertia.Service
 	db         *gorm.DB
-	sessionMgr *session.Manager
 }
 
 func New(opts ...options.Option) *App {
@@ -76,25 +75,12 @@ func New(opts ...options.Option) *App {
 		}
 	}
 
-	var sessionMgr *session.Manager
-	if appOpts.EnableSessions {
-		var err error
-		sessionMgr, err = session.ProvideSessionManager(*cfg, appOpts.SessionOptions, db)
-		if err != nil {
-			panic(err)
-		}
-	}
-
 	var fxOptions []fx.Option
 	fxOptions = append(fxOptions, fx.Supply(cfg))
 	fxOptions = append(fxOptions, fx.Supply(srv))
 
 	if db != nil {
 		fxOptions = append(fxOptions, fx.Supply(db))
-	}
-
-	if sessionMgr != nil {
-		fxOptions = append(fxOptions, fx.Supply(sessionMgr))
 	}
 
 	if templateSvc != nil {
@@ -147,9 +133,11 @@ func New(opts ...options.Option) *App {
 		})
 	}))
 
-	if sessionMgr != nil {
+	if appOpts.EnableSessions {
 		fxOptions = append(fxOptions, fx.Invoke(func(srv *server.Server, sessionMgr *session.Manager) {
-			srv.Echo().Use(session.Middleware(sessionMgr))
+			if sessionMgr != nil {
+				srv.Echo().Use(session.Middleware(sessionMgr))
+			}
 		}))
 	}
 
@@ -166,6 +154,11 @@ func New(opts ...options.Option) *App {
 
 	if appOpts.EnableMail {
 		fxOptions = append(fxOptions, mail.Module)
+	}
+
+	if appOpts.EnableSessions {
+		fxOptions = append(fxOptions, fx.Supply(appOpts.SessionOptions))
+		fxOptions = append(fxOptions, session.Module)
 	}
 
 	if appOpts.EnableAuth {
@@ -189,7 +182,6 @@ func New(opts ...options.Option) *App {
 		fx:         fxApp,
 		inertiaSvc: inertiaSvc,
 		db:         db,
-		sessionMgr: sessionMgr,
 	}
 }
 

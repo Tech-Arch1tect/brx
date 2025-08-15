@@ -19,7 +19,7 @@ type Options struct {
 	Store scs.Store
 }
 
-func ProvideSessionManager(cfg config.Config, opts *Options, db *gorm.DB) (*Manager, error) {
+func ProvideSessionManager(cfg *config.Config, opts *Options, db *gorm.DB) (*Manager, error) {
 	if !cfg.Session.Enabled {
 		return nil, nil
 	}
@@ -74,6 +74,14 @@ func ProvideSessionManager(cfg config.Config, opts *Options, db *gorm.DB) (*Mana
 	}, nil
 }
 
+func ProvideSessionService(db *gorm.DB, manager *Manager) SessionService {
+	if db == nil || manager == nil {
+		return nil
+	}
+	return NewSessionService(db, manager)
+}
+
 var Module = fx.Module("session",
 	fx.Provide(ProvideSessionManager),
+	fx.Provide(ProvideSessionService),
 )

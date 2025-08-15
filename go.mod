@@ -8,6 +8,7 @@ require (
 	github.com/caarlos0/env/v10 v10.0.0
 	github.com/joho/godotenv v1.5.1
 	github.com/labstack/echo/v4 v4.13.4
+	github.com/mileusna/useragent v1.3.5
 	github.com/romsar/gonertia/v2 v2.0.6
 	github.com/wneessen/go-mail v0.6.2
 	go.uber.org/fx v1.24.0
