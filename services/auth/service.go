@@ -304,15 +304,17 @@ func (s *Service) RequestPasswordReset(email string) error {
 }
 
 func (s *Service) CompletePasswordReset(token, newPassword string) error {
+	resetToken, err := s.ValidatePasswordResetToken(token)
+	if err != nil {
+		return err
+	}
+
 	if err := s.ResetPassword(token, newPassword); err != nil {
 		return err
 	}
 
-	resetToken, err := s.ValidatePasswordResetToken(token)
-	if err == nil {
-		if err := s.SendPasswordResetSuccessEmail(resetToken.Email); err != nil {
-			return fmt.Errorf("password was reset but failed to send confirmation email: %w", err)
-		}
+	if err := s.SendPasswordResetSuccessEmail(resetToken.Email); err != nil {
+		return fmt.Errorf("password was reset but failed to send confirmation email: %w", err)
 	}
 
 	return nil
