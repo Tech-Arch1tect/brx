@@ -107,7 +107,7 @@ func (s *Service) Send(message *mail.Msg) error {
 	return s.client.DialAndSend(message)
 }
 
-func (s *Service) SendTemplate(templateName string, to []string, subject string, data TemplateData) error {
+func (s *Service) SendTemplate(templateName string, to []string, subject string, data map[string]any) error {
 	message := s.NewMessage()
 
 	if err := message.To(to...); err != nil {
@@ -123,7 +123,7 @@ func (s *Service) SendTemplate(templateName string, to []string, subject string,
 	return s.Send(message)
 }
 
-func (s *Service) renderTemplate(templateName string, data TemplateData, message *mail.Msg) error {
+func (s *Service) renderTemplate(templateName string, data map[string]any, message *mail.Msg) error {
 	var hasTemplate bool
 
 	if s.htmlTemplates != nil {

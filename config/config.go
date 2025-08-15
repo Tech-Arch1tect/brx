@@ -9,6 +9,7 @@ import (
 )
 
 type Config struct {
+	App       AppConfig       `envPrefix:"BRX_APP_"`
 	Server    ServerConfig    `envPrefix:"BRX_SERVER_"`
 	Log       LogConfig       `envPrefix:"BRX_LOG_"`
 	Templates TemplatesConfig `envPrefix:"BRX_TEMPLATES_"`
@@ -19,6 +20,11 @@ type Config struct {
 	RateLimit RateLimitConfig `envPrefix:"BRX_RATELIMIT_"`
 	CSRF      CSRFConfig      `envPrefix:"BRX_CSRF_"`
 	Mail      MailConfig      `envPrefix:"BRX_MAIL_"`
+}
+
+type AppConfig struct {
+	Name string `env:"NAME" envDefault:"brx Application"`
+	URL  string `env:"URL" envDefault:"http://localhost:8080"`
 }
 
 type ServerConfig struct {
@@ -66,12 +72,15 @@ type SessionConfig struct {
 }
 
 type AuthConfig struct {
-	MinLength      int  `env:"MIN_LENGTH" envDefault:"8"`
-	RequireUpper   bool `env:"REQUIRE_UPPER" envDefault:"true"`
-	RequireLower   bool `env:"REQUIRE_LOWER" envDefault:"true"`
-	RequireNumber  bool `env:"REQUIRE_NUMBER" envDefault:"true"`
-	RequireSpecial bool `env:"REQUIRE_SPECIAL" envDefault:"false"`
-	BcryptCost     int  `env:"BCRYPT_COST" envDefault:"10"`
+	MinLength                int           `env:"MIN_LENGTH" envDefault:"8"`
+	RequireUpper             bool          `env:"REQUIRE_UPPER" envDefault:"true"`
+	RequireLower             bool          `env:"REQUIRE_LOWER" envDefault:"true"`
+	RequireNumber            bool          `env:"REQUIRE_NUMBER" envDefault:"true"`
+	RequireSpecial           bool          `env:"REQUIRE_SPECIAL" envDefault:"false"`
+	BcryptCost               int           `env:"BCRYPT_COST" envDefault:"10"`
+	PasswordResetEnabled     bool          `env:"PASSWORD_RESET_ENABLED" envDefault:"true"`
+	PasswordResetTokenLength int           `env:"PASSWORD_RESET_TOKEN_LENGTH" envDefault:"32"`
+	PasswordResetExpiry      time.Duration `env:"PASSWORD_RESET_EXPIRY" envDefault:"1h"`
 }
 
 type RateLimitConfig struct {

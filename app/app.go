@@ -164,12 +164,12 @@ func New(opts ...options.Option) *App {
 		}))
 	}
 
-	if appOpts.EnableAuth {
-		fxOptions = append(fxOptions, auth.Module)
-	}
-
 	if appOpts.EnableMail {
 		fxOptions = append(fxOptions, mail.Module)
+	}
+
+	if appOpts.EnableAuth {
+		fxOptions = append(fxOptions, auth.Module)
 	}
 
 	fxOptions = append(fxOptions, fx.Provide(ratelimit.ProvideRateLimitStore))
