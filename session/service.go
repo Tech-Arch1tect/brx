@@ -126,6 +126,10 @@ func (s *sessionService) SessionExists(token string) (bool, error) {
 	return false, nil
 }
 
+func (s *sessionService) RemoveSessionByToken(token string) error {
+	return s.db.Where("token = ?", token).Delete(&UserSession{}).Error
+}
+
 func GetBrowserInfo(userAgentString string) string {
 	if userAgentString == "" {
 		return "Unknown Browser"

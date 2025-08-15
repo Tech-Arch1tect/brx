@@ -42,9 +42,19 @@ func Logout(c echo.Context) {
 		return
 	}
 	ctx := c.Request().Context()
+
+	// Get the current session token before destroying it
+	token := manager.Token(ctx)
+
+	// Remove session data and destroy the SCS session
 	manager.Remove(ctx, UserIDKey)
 	manager.Remove(ctx, AuthenticatedKey)
 	manager.Destroy(ctx)
+
+	// Clean up our session tracking record
+	if service := GetSessionService(c); service != nil && token != "" {
+		_ = service.RemoveSessionByToken(token)
+	}
 }
 
 func GetUserID(c echo.Context) any {

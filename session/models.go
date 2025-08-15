@@ -35,4 +35,7 @@ type SessionService interface {
 	CleanupExpiredSessions() error
 
 	SessionExists(token string) (bool, error)
+
+	// RemoveSessionByToken removes a session tracking record by token
+	RemoveSessionByToken(token string) error
 }
