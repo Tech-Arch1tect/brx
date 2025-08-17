@@ -73,15 +73,18 @@ type SessionConfig struct {
 }
 
 type AuthConfig struct {
-	MinLength                int           `env:"MIN_LENGTH" envDefault:"8"`
-	RequireUpper             bool          `env:"REQUIRE_UPPER" envDefault:"true"`
-	RequireLower             bool          `env:"REQUIRE_LOWER" envDefault:"true"`
-	RequireNumber            bool          `env:"REQUIRE_NUMBER" envDefault:"true"`
-	RequireSpecial           bool          `env:"REQUIRE_SPECIAL" envDefault:"false"`
-	BcryptCost               int           `env:"BCRYPT_COST" envDefault:"10"`
-	PasswordResetEnabled     bool          `env:"PASSWORD_RESET_ENABLED" envDefault:"true"`
-	PasswordResetTokenLength int           `env:"PASSWORD_RESET_TOKEN_LENGTH" envDefault:"32"`
-	PasswordResetExpiry      time.Duration `env:"PASSWORD_RESET_EXPIRY" envDefault:"1h"`
+	MinLength                    int           `env:"MIN_LENGTH" envDefault:"8"`
+	RequireUpper                 bool          `env:"REQUIRE_UPPER" envDefault:"true"`
+	RequireLower                 bool          `env:"REQUIRE_LOWER" envDefault:"true"`
+	RequireNumber                bool          `env:"REQUIRE_NUMBER" envDefault:"true"`
+	RequireSpecial               bool          `env:"REQUIRE_SPECIAL" envDefault:"false"`
+	BcryptCost                   int           `env:"BCRYPT_COST" envDefault:"10"`
+	PasswordResetEnabled         bool          `env:"PASSWORD_RESET_ENABLED" envDefault:"true"`
+	PasswordResetTokenLength     int           `env:"PASSWORD_RESET_TOKEN_LENGTH" envDefault:"32"`
+	PasswordResetExpiry          time.Duration `env:"PASSWORD_RESET_EXPIRY" envDefault:"1h"`
+	EmailVerificationEnabled     bool          `env:"EMAIL_VERIFICATION_ENABLED" envDefault:"false"`
+	EmailVerificationTokenLength int           `env:"EMAIL_VERIFICATION_TOKEN_LENGTH" envDefault:"32"`
+	EmailVerificationExpiry      time.Duration `env:"EMAIL_VERIFICATION_EXPIRY" envDefault:"24h"`
 }
 
 type TOTPConfig struct {

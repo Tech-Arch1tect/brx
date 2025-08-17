@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 	"unicode"
@@ -15,12 +16,17 @@ import (
 )
 
 var (
-	ErrPasswordHashingFailed     = errors.New("failed to hash password")
-	ErrInvalidCredentials        = errors.New("invalid credentials")
-	ErrPasswordResetDisabled     = errors.New("password reset is disabled")
-	ErrPasswordResetTokenInvalid = errors.New("invalid or expired password reset token")
-	ErrPasswordResetTokenExpired = errors.New("password reset token has expired")
-	ErrPasswordResetTokenUsed    = errors.New("password reset token has already been used")
+	ErrPasswordHashingFailed         = errors.New("failed to hash password")
+	ErrInvalidCredentials            = errors.New("invalid credentials")
+	ErrPasswordResetDisabled         = errors.New("password reset is disabled")
+	ErrPasswordResetTokenInvalid     = errors.New("invalid or expired password reset token")
+	ErrPasswordResetTokenExpired     = errors.New("password reset token has expired")
+	ErrPasswordResetTokenUsed        = errors.New("password reset token has already been used")
+	ErrEmailVerificationDisabled     = errors.New("email verification is disabled")
+	ErrEmailVerificationTokenInvalid = errors.New("invalid or expired email verification token")
+	ErrEmailVerificationTokenExpired = errors.New("email verification token has expired")
+	ErrEmailVerificationTokenUsed    = errors.New("email verification token has already been used")
+	ErrEmailAlreadyVerified          = errors.New("email is already verified")
 )
 
 type MailService interface {
@@ -54,15 +60,18 @@ func NewServiceWithDefaults() *Service {
 			URL:  "http://localhost:8080",
 		},
 		Auth: config.AuthConfig{
-			MinLength:                8,
-			RequireUpper:             true,
-			RequireLower:             true,
-			RequireNumber:            true,
-			RequireSpecial:           false,
-			BcryptCost:               bcrypt.DefaultCost,
-			PasswordResetEnabled:     true,
-			PasswordResetTokenLength: 32,
-			PasswordResetExpiry:      time.Hour,
+			MinLength:                    8,
+			RequireUpper:                 true,
+			RequireLower:                 true,
+			RequireNumber:                true,
+			RequireSpecial:               false,
+			BcryptCost:                   bcrypt.DefaultCost,
+			PasswordResetEnabled:         true,
+			PasswordResetTokenLength:     32,
+			PasswordResetExpiry:          time.Hour,
+			EmailVerificationEnabled:     false,
+			EmailVerificationTokenLength: 32,
+			EmailVerificationExpiry:      24 * time.Hour,
 		},
 	}, nil)
 }
@@ -139,6 +148,14 @@ func (s *Service) MustHashPassword(password string) string {
 
 func (s *Service) generateSecureToken() (string, error) {
 	bytes := make([]byte, s.config.Auth.PasswordResetTokenLength)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", fmt.Errorf("failed to generate secure token: %w", err)
+	}
+	return hex.EncodeToString(bytes), nil
+}
+
+func (s *Service) generateEmailVerificationToken() (string, error) {
+	bytes := make([]byte, s.config.Auth.EmailVerificationTokenLength)
 	if _, err := rand.Read(bytes); err != nil {
 		return "", fmt.Errorf("failed to generate secure token: %w", err)
 	}
@@ -318,4 +335,180 @@ func (s *Service) CompletePasswordReset(token, newPassword string) error {
 	}
 
 	return nil
+}
+
+func (s *Service) CreateEmailVerificationToken(email string) (*EmailVerificationToken, error) {
+	if !s.config.Auth.EmailVerificationEnabled {
+		return nil, ErrEmailVerificationDisabled
+	}
+
+	if s.db == nil {
+		return nil, fmt.Errorf("database is required for email verification functionality")
+	}
+
+	token, err := s.generateEmailVerificationToken()
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	verificationToken := &EmailVerificationToken{
+		Email:     email,
+		Token:     token,
+		ExpiresAt: now.Add(s.config.Auth.EmailVerificationExpiry),
+		Used:      false,
+	}
+
+	if err := s.db.Create(verificationToken).Error; err != nil {
+		return nil, fmt.Errorf("failed to create email verification token: %w", err)
+	}
+
+	return verificationToken, nil
+}
+
+func (s *Service) ValidateEmailVerificationToken(token string) (*EmailVerificationToken, error) {
+	if !s.config.Auth.EmailVerificationEnabled {
+		return nil, ErrEmailVerificationDisabled
+	}
+
+	if s.db == nil {
+		return nil, fmt.Errorf("database is required for email verification functionality")
+	}
+
+	var verificationToken EmailVerificationToken
+	if err := s.db.Where("token = ?", token).First(&verificationToken).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrEmailVerificationTokenInvalid
+		}
+		return nil, fmt.Errorf("failed to validate email verification token: %w", err)
+	}
+
+	if verificationToken.Used {
+		return nil, ErrEmailVerificationTokenUsed
+	}
+
+	if time.Now().After(verificationToken.ExpiresAt) {
+		return nil, ErrEmailVerificationTokenExpired
+	}
+
+	return &verificationToken, nil
+}
+
+func (s *Service) UseEmailVerificationToken(token string) (*EmailVerificationToken, error) {
+	verificationToken, err := s.ValidateEmailVerificationToken(token)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	verificationToken.Used = true
+	verificationToken.UsedAt = &now
+
+	if err := s.db.Save(verificationToken).Error; err != nil {
+		return nil, fmt.Errorf("failed to mark email verification token as used: %w", err)
+	}
+
+	return verificationToken, nil
+}
+
+func (s *Service) CleanupExpiredEmailVerificationTokens() error {
+	if !s.config.Auth.EmailVerificationEnabled {
+		return ErrEmailVerificationDisabled
+	}
+
+	if s.db == nil {
+		return fmt.Errorf("database is required for email verification functionality")
+	}
+
+	result := s.db.Where("expires_at < ?", time.Now()).Delete(&EmailVerificationToken{})
+	if result.Error != nil {
+		return fmt.Errorf("failed to cleanup expired email verification tokens: %w", result.Error)
+	}
+
+	return nil
+}
+
+func (s *Service) SendEmailVerificationEmail(email, verificationURL string, expiryDuration time.Duration) error {
+	log.Printf("SendEmailVerificationEmail called for: %s", email)
+
+	if s.mailService == nil {
+		log.Printf("Mail service is not configured")
+		return fmt.Errorf("mail service is not configured")
+	}
+
+	data := map[string]any{
+		"Email":           email,
+		"VerificationURL": verificationURL,
+		"ExpiryDuration":  expiryDuration.String(),
+		"AppName":         s.config.App.Name,
+	}
+
+	log.Printf("Mail service configured, sending template with data: %+v", data)
+	subject := "Please verify your email address"
+	err := s.mailService.SendTemplate("email_verification", []string{email}, subject, data)
+	if err != nil {
+		log.Printf("Mail service SendTemplate failed: %v", err)
+	} else {
+		log.Printf("Mail service SendTemplate succeeded for: %s", email)
+	}
+	return err
+}
+
+func (s *Service) RequestEmailVerification(email string) error {
+	log.Printf("RequestEmailVerification called for email: %s", email)
+
+	if !s.config.Auth.EmailVerificationEnabled {
+		log.Printf("Email verification is disabled")
+		return ErrEmailVerificationDisabled
+	}
+
+	log.Printf("Creating email verification token for: %s", email)
+	verificationToken, err := s.CreateEmailVerificationToken(email)
+	if err != nil {
+		log.Printf("Failed to create email verification token: %v", err)
+		return err
+	}
+
+	verificationURL := fmt.Sprintf("%s/auth/verify-email?token=%s", s.config.App.URL, verificationToken.Token)
+	log.Printf("Generated verification URL: %s", verificationURL)
+
+	log.Printf("Sending email verification email to: %s", email)
+	if err := s.SendEmailVerificationEmail(email, verificationURL, s.config.Auth.EmailVerificationExpiry); err != nil {
+		log.Printf("Failed to send email verification email: %v", err)
+		return fmt.Errorf("failed to send email verification email: %w", err)
+	}
+
+	log.Printf("Email verification email sent successfully to: %s", email)
+	return nil
+}
+
+func (s *Service) VerifyEmail(token string) error {
+	verificationToken, err := s.UseEmailVerificationToken(token)
+	if err != nil {
+		return err
+	}
+
+	if err := s.db.Table("users").Where("email = ?", verificationToken.Email).Update("email_verified_at", time.Now()).Error; err != nil {
+		return fmt.Errorf("failed to mark email as verified: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Service) IsEmailVerificationRequired() bool {
+	return s.config.Auth.EmailVerificationEnabled
+}
+
+func (s *Service) IsEmailVerified(email string) bool {
+	if !s.config.Auth.EmailVerificationEnabled {
+		return true
+	}
+
+	if s.db == nil {
+		return true
+	}
+
+	var count int64
+	s.db.Table("users").Where("email = ? AND email_verified_at IS NOT NULL", email).Count(&count)
+	return count > 0
 }
