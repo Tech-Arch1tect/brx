@@ -1,12 +1,18 @@
 package session
 
 import (
+	"encoding/gob"
+
 	"github.com/labstack/echo/v4"
 )
 
+func init() {
+	gob.Register([]FlashMessage{})
+	gob.Register(FlashMessage{})
+}
+
 const (
-	FlashKey     = "_flash"
-	FlashTypeKey = "_flash_type"
+	FlashMessagesKey = "_flash_messages"
 )
 
 type FlashType string
@@ -23,81 +29,65 @@ type FlashMessage struct {
 	Type    FlashType `json:"type"`
 }
 
-func SetFlash(c echo.Context, message string) {
-	SetFlashWithType(c, message, FlashError)
-}
-
-func SetFlashWithType(c echo.Context, message string, flashType FlashType) {
+func AddFlash(c echo.Context, message string, flashType FlashType) {
 	manager := GetManager(c)
 	if manager == nil {
 		return
 	}
 	ctx := c.Request().Context()
-	manager.Put(ctx, FlashKey, message)
-	manager.Put(ctx, FlashTypeKey, string(flashType))
-}
 
-func SetFlashSuccess(c echo.Context, message string) {
-	SetFlashWithType(c, message, FlashSuccess)
-}
-
-func SetFlashError(c echo.Context, message string) {
-	SetFlashWithType(c, message, FlashError)
-}
-
-func SetFlashWarning(c echo.Context, message string) {
-	SetFlashWithType(c, message, FlashWarning)
-}
-
-func SetFlashInfo(c echo.Context, message string) {
-	SetFlashWithType(c, message, FlashInfo)
-}
-
-func GetFlash(c echo.Context) string {
-	manager := GetManager(c)
-	if manager == nil {
-		return ""
-	}
-	ctx := c.Request().Context()
-	flash := manager.Pop(ctx, FlashKey)
-
-	manager.Pop(ctx, FlashTypeKey)
-	if flash == nil {
-		return ""
-	}
-	if msg, ok := flash.(string); ok {
-		return msg
-	}
-	return ""
-}
-
-func GetFlashWithType(c echo.Context) *FlashMessage {
-	manager := GetManager(c)
-	if manager == nil {
-		return nil
-	}
-	ctx := c.Request().Context()
-	flash := manager.Pop(ctx, FlashKey)
-	flashType := manager.Pop(ctx, FlashTypeKey)
-
-	if flash == nil {
-		return nil
-	}
-
-	msg, ok := flash.(string)
-	if !ok {
-		return nil
-	}
-
-	msgType := FlashError
-	if flashType != nil {
-		if typeStr, ok := flashType.(string); ok {
-			msgType = FlashType(typeStr)
+	var messages []FlashMessage
+	if existingMessages := manager.Get(ctx, FlashMessagesKey); existingMessages != nil {
+		if msgs, ok := existingMessages.([]FlashMessage); ok {
+			messages = msgs
 		}
 	}
 
-	return &FlashMessage{
-		Message: msg,
-		Type:    msgType,
+	messages = append(messages, FlashMessage{
+		Message: message,
+		Type:    flashType,
+	})
+
+	manager.Put(ctx, FlashMessagesKey, messages)
+}
+
+func AddFlashSuccess(c echo.Context, message string) {
+	AddFlash(c, message, FlashSuccess)
+}
+
+func AddFlashError(c echo.Context, message string) {
+	AddFlash(c, message, FlashError)
+}
+
+func AddFlashWarning(c echo.Context, message string) {
+	AddFlash(c, message, FlashWarning)
+}
+
+func AddFlashInfo(c echo.Context, message string) {
+	AddFlash(c, message, FlashInfo)
+}
+
+func GetFlashMessages(c echo.Context) []FlashMessage {
+	manager := GetManager(c)
+	if manager == nil {
+		return nil
 	}
+	ctx := c.Request().Context()
+
+	if messages := manager.Pop(ctx, FlashMessagesKey); messages != nil {
+		if msgs, ok := messages.([]FlashMessage); ok {
+			return msgs
+		}
+	}
+
+	return nil
+}
+
+func ClearFlashMessages(c echo.Context) {
+	manager := GetManager(c)
+	if manager == nil {
+		return
+	}
+	ctx := c.Request().Context()
+	manager.Pop(ctx, FlashMessagesKey)
 }
