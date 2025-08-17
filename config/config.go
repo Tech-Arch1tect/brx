@@ -17,6 +17,7 @@ type Config struct {
 	Database  DatabaseConfig  `envPrefix:"BRX_DATABASE_"`
 	Session   SessionConfig   `envPrefix:"BRX_SESSION_"`
 	Auth      AuthConfig      `envPrefix:"BRX_AUTH_"`
+	TOTP      TOTPConfig      `envPrefix:"BRX_TOTP_"`
 	RateLimit RateLimitConfig `envPrefix:"BRX_RATELIMIT_"`
 	CSRF      CSRFConfig      `envPrefix:"BRX_CSRF_"`
 	Mail      MailConfig      `envPrefix:"BRX_MAIL_"`
@@ -81,6 +82,11 @@ type AuthConfig struct {
 	PasswordResetEnabled     bool          `env:"PASSWORD_RESET_ENABLED" envDefault:"true"`
 	PasswordResetTokenLength int           `env:"PASSWORD_RESET_TOKEN_LENGTH" envDefault:"32"`
 	PasswordResetExpiry      time.Duration `env:"PASSWORD_RESET_EXPIRY" envDefault:"1h"`
+}
+
+type TOTPConfig struct {
+	Enabled bool   `env:"ENABLED" envDefault:"false"`
+	Issuer  string `env:"ISSUER" envDefault:"brx Application"`
 }
 
 type RateLimitConfig struct {

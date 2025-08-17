@@ -8,11 +8,20 @@ import (
 
 const (
 	UserIDKey        = "_user_id"
-	FlashKey         = "_flash"
 	AuthenticatedKey = "_authenticated"
+	TOTPVerifiedKey  = "_totp_verified"
+	TOTPEnabledKey   = "_totp_enabled"
 )
 
+type TOTPChecker interface {
+	IsUserTOTPEnabled(userID uint) bool
+}
+
 func Login(c echo.Context, userID any) {
+	LoginWithTOTPService(c, userID, nil)
+}
+
+func LoginWithTOTPService(c echo.Context, userID any, totpSvc TOTPChecker) {
 	manager := GetManager(c)
 	if manager == nil {
 		return
@@ -21,10 +30,19 @@ func Login(c echo.Context, userID any) {
 	manager.Put(ctx, UserIDKey, userID)
 	manager.Put(ctx, AuthenticatedKey, true)
 
+	manager.Remove(ctx, TOTPVerifiedKey)
+
+	userIDUint := convertToUint(userID)
+	if userIDUint > 0 && totpSvc != nil {
+		enabled := totpSvc.IsUserTOTPEnabled(userIDUint)
+		manager.Put(ctx, TOTPEnabledKey, enabled)
+	} else {
+		manager.Put(ctx, TOTPEnabledKey, false)
+	}
+
 	if service := GetSessionService(c); service != nil {
 		token := manager.Token(ctx)
 		if token != "" {
-			userIDUint := convertToUint(userID)
 			if userIDUint > 0 {
 				ipAddress := c.RealIP()
 				userAgent := c.Request().UserAgent()
@@ -43,15 +61,14 @@ func Logout(c echo.Context) {
 	}
 	ctx := c.Request().Context()
 
-	// Get the current session token before destroying it
 	token := manager.Token(ctx)
 
-	// Remove session data and destroy the SCS session
 	manager.Remove(ctx, UserIDKey)
 	manager.Remove(ctx, AuthenticatedKey)
+	manager.Remove(ctx, TOTPVerifiedKey)
+	manager.Remove(ctx, TOTPEnabledKey)
 	manager.Destroy(ctx)
 
-	// Clean up our session tracking record
 	if service := GetSessionService(c); service != nil && token != "" {
 		_ = service.RemoveSessionByToken(token)
 	}
@@ -150,31 +167,6 @@ func RequireAuthWeb(loginURL string) echo.MiddlewareFunc {
 	}
 }
 
-func SetFlash(c echo.Context, message string) {
-	manager := GetManager(c)
-	if manager == nil {
-		return
-	}
-	ctx := c.Request().Context()
-	manager.Put(ctx, FlashKey, message)
-}
-
-func GetFlash(c echo.Context) string {
-	manager := GetManager(c)
-	if manager == nil {
-		return ""
-	}
-	ctx := c.Request().Context()
-	flash := manager.Pop(ctx, FlashKey)
-	if flash == nil {
-		return ""
-	}
-	if msg, ok := flash.(string); ok {
-		return msg
-	}
-	return ""
-}
-
 func Set(c echo.Context, key string, value any) {
 	manager := GetManager(c)
 	if manager == nil {
@@ -207,6 +199,83 @@ func GetSessionService(c echo.Context) SessionService {
 		return service
 	}
 	return nil
+}
+
+func SetTOTPVerified(c echo.Context, verified bool) {
+	manager := GetManager(c)
+	if manager == nil {
+		return
+	}
+	ctx := c.Request().Context()
+	manager.Put(ctx, TOTPVerifiedKey, verified)
+}
+
+func ClearTOTPVerification(c echo.Context) {
+	manager := GetManager(c)
+	if manager == nil {
+		return
+	}
+	ctx := c.Request().Context()
+	manager.Remove(ctx, TOTPVerifiedKey)
+}
+
+func SetTOTPEnabled(c echo.Context, enabled bool) {
+	manager := GetManager(c)
+	if manager == nil {
+		return
+	}
+	ctx := c.Request().Context()
+	manager.Put(ctx, TOTPEnabledKey, enabled)
+}
+
+func IsTOTPVerified(c echo.Context) bool {
+	manager := GetManager(c)
+	if manager == nil {
+		return false
+	}
+	ctx := c.Request().Context()
+	return manager.GetBool(ctx, TOTPVerifiedKey)
+}
+
+func IsTOTPEnabled(c echo.Context) bool {
+	manager := GetManager(c)
+	if manager == nil {
+		return false
+	}
+	ctx := c.Request().Context()
+	return manager.GetBool(ctx, TOTPEnabledKey)
+}
+
+func RequireTOTP() echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			if !IsAuthenticated(c) {
+				return echo.NewHTTPError(401, "Authentication required")
+			}
+
+			if IsTOTPEnabled(c) && !IsTOTPVerified(c) {
+				return echo.NewHTTPError(401, "TOTP verification required")
+			}
+
+			return next(c)
+		}
+	}
+}
+
+func RequireTOTPWeb(totpURL string) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			if !IsAuthenticated(c) {
+				return c.Redirect(302, "/auth/login")
+			}
+
+			if IsTOTPEnabled(c) && !IsTOTPVerified(c) {
+				return c.Redirect(302, totpURL)
+			}
+
+			return next(c)
+		}
+	}
 }
 
 func convertToUint(userID any) uint {

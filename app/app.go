@@ -17,6 +17,7 @@ import (
 	"github.com/tech-arch1tect/brx/services/inertia"
 	"github.com/tech-arch1tect/brx/services/mail"
 	"github.com/tech-arch1tect/brx/services/templates"
+	"github.com/tech-arch1tect/brx/services/totp"
 	"github.com/tech-arch1tect/brx/session"
 	"go.uber.org/fx"
 	"gorm.io/gorm"
@@ -163,6 +164,10 @@ func New(opts ...options.Option) *App {
 
 	if appOpts.EnableAuth {
 		fxOptions = append(fxOptions, auth.Module)
+	}
+
+	if appOpts.EnableTOTP {
+		fxOptions = append(fxOptions, totp.Module)
 	}
 
 	fxOptions = append(fxOptions, fx.Provide(ratelimit.ProvideRateLimitStore))

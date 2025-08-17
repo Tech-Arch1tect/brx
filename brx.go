@@ -41,6 +41,10 @@ func WithMail() options.Option {
 	return options.WithMail()
 }
 
+func WithTOTP() options.Option {
+	return options.WithTOTP()
+}
+
 func WithFxOptions(fxOpts ...any) options.Option {
 	return options.WithFxOptions(fxOpts...)
 }
