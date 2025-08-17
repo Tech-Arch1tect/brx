@@ -11,6 +11,7 @@ import (
 	"github.com/tech-arch1tect/brx/internal/options"
 	"github.com/tech-arch1tect/brx/middleware/csrf"
 	"github.com/tech-arch1tect/brx/middleware/inertiacsrf"
+	"github.com/tech-arch1tect/brx/middleware/inertiashared"
 	"github.com/tech-arch1tect/brx/middleware/ratelimit"
 	"github.com/tech-arch1tect/brx/server"
 	"github.com/tech-arch1tect/brx/services/auth"
@@ -143,13 +144,28 @@ func New(opts ...options.Option) *App {
 	}
 
 	if inertiaSvc != nil {
-		fxOptions = append(fxOptions, fx.Invoke(func(srv *server.Server, inertiaSvc *inertia.Service, cfg *config.Config) {
-			srv.Echo().Use(inertiaSvc.Middleware())
+		type SharedPropsParams struct {
+			fx.In
+			Server       *server.Server
+			InertiaSvc   *inertia.Service
+			Config       *config.Config
+			UserProvider inertiashared.UserProvider `optional:"true"`
+		}
 
-			if cfg.CSRF.Enabled {
-				srv.Echo().Use(csrf.WithConfig(&cfg.CSRF))
-				srv.Echo().Use(inertiacsrf.Middleware(cfg))
+		fxOptions = append(fxOptions, fx.Invoke(func(p SharedPropsParams) {
+			p.Server.Echo().Use(p.InertiaSvc.Middleware())
+
+			if p.Config.CSRF.Enabled {
+				p.Server.Echo().Use(csrf.WithConfig(&p.Config.CSRF))
+				p.Server.Echo().Use(inertiacsrf.Middleware(p.Config))
 			}
+
+			middlewareConfig := inertiashared.Config{
+				AuthEnabled:  true,
+				FlashEnabled: true,
+				UserProvider: p.UserProvider,
+			}
+			p.Server.Echo().Use(inertiashared.MiddlewareWithConfig(middlewareConfig))
 		}))
 	}
 
