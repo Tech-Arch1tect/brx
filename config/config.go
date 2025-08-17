@@ -85,6 +85,10 @@ type AuthConfig struct {
 	EmailVerificationEnabled     bool          `env:"EMAIL_VERIFICATION_ENABLED" envDefault:"false"`
 	EmailVerificationTokenLength int           `env:"EMAIL_VERIFICATION_TOKEN_LENGTH" envDefault:"32"`
 	EmailVerificationExpiry      time.Duration `env:"EMAIL_VERIFICATION_EXPIRY" envDefault:"24h"`
+
+	RememberMeEnabled     bool          `env:"REMEMBER_ME_ENABLED" envDefault:"false"`
+	RememberMeTokenLength int           `env:"REMEMBER_ME_TOKEN_LENGTH" envDefault:"32"`
+	RememberMeExpiry      time.Duration `env:"REMEMBER_ME_EXPIRY" envDefault:"720h"`
 }
 
 type TOTPConfig struct {

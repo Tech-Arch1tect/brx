@@ -27,6 +27,10 @@ var (
 	ErrEmailVerificationTokenExpired = errors.New("email verification token has expired")
 	ErrEmailVerificationTokenUsed    = errors.New("email verification token has already been used")
 	ErrEmailAlreadyVerified          = errors.New("email is already verified")
+	ErrRememberMeDisabled            = errors.New("remember me functionality is disabled")
+	ErrRememberMeTokenInvalid        = errors.New("invalid or expired remember me token")
+	ErrRememberMeTokenExpired        = errors.New("remember me token has expired")
+	ErrRememberMeTokenUsed           = errors.New("remember me token has already been used")
 )
 
 type MailService interface {
@@ -156,6 +160,14 @@ func (s *Service) generateSecureToken() (string, error) {
 
 func (s *Service) generateEmailVerificationToken() (string, error) {
 	bytes := make([]byte, s.config.Auth.EmailVerificationTokenLength)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", fmt.Errorf("failed to generate secure token: %w", err)
+	}
+	return hex.EncodeToString(bytes), nil
+}
+
+func (s *Service) generateRememberMeToken() (string, error) {
+	bytes := make([]byte, s.config.Auth.RememberMeTokenLength)
 	if _, err := rand.Read(bytes); err != nil {
 		return "", fmt.Errorf("failed to generate secure token: %w", err)
 	}
@@ -511,4 +523,122 @@ func (s *Service) IsEmailVerified(email string) bool {
 	var count int64
 	s.db.Table("users").Where("email = ? AND email_verified_at IS NOT NULL", email).Count(&count)
 	return count > 0
+}
+
+func (s *Service) CreateRememberMeToken(userID uint) (*RememberMeToken, error) {
+	if !s.config.Auth.RememberMeEnabled {
+		return nil, ErrRememberMeDisabled
+	}
+
+	if s.db == nil {
+		return nil, fmt.Errorf("database is required for remember me functionality")
+	}
+
+	s.db.Where("user_id = ?", userID).Delete(&RememberMeToken{})
+
+	token, err := s.generateRememberMeToken()
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	rememberToken := &RememberMeToken{
+		UserID:    userID,
+		Token:     token,
+		ExpiresAt: now.Add(s.config.Auth.RememberMeExpiry),
+		Used:      false,
+	}
+
+	if err := s.db.Create(rememberToken).Error; err != nil {
+		return nil, fmt.Errorf("failed to create remember me token: %w", err)
+	}
+
+	return rememberToken, nil
+}
+
+func (s *Service) ValidateRememberMeToken(token string) (*RememberMeToken, error) {
+	if !s.config.Auth.RememberMeEnabled {
+		return nil, ErrRememberMeDisabled
+	}
+
+	if s.db == nil {
+		return nil, fmt.Errorf("database is required for remember me functionality")
+	}
+
+	var rememberToken RememberMeToken
+	if err := s.db.Where("token = ?", token).First(&rememberToken).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrRememberMeTokenInvalid
+		}
+		return nil, fmt.Errorf("failed to validate remember me token: %w", err)
+	}
+
+	if rememberToken.Used {
+		return nil, ErrRememberMeTokenUsed
+	}
+
+	if time.Now().After(rememberToken.ExpiresAt) {
+		return nil, ErrRememberMeTokenExpired
+	}
+
+	return &rememberToken, nil
+}
+
+func (s *Service) UseRememberMeToken(token string) (*RememberMeToken, error) {
+	rememberToken, err := s.ValidateRememberMeToken(token)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	rememberToken.Used = true
+	rememberToken.UsedAt = &now
+
+	if err := s.db.Save(rememberToken).Error; err != nil {
+		return nil, fmt.Errorf("failed to mark remember me token as used: %w", err)
+	}
+
+	return rememberToken, nil
+}
+
+func (s *Service) CleanupExpiredRememberMeTokens() error {
+	if !s.config.Auth.RememberMeEnabled {
+		return ErrRememberMeDisabled
+	}
+
+	if s.db == nil {
+		return fmt.Errorf("database is required for remember me functionality")
+	}
+
+	result := s.db.Where("expires_at < ?", time.Now()).Delete(&RememberMeToken{})
+	if result.Error != nil {
+		return fmt.Errorf("failed to cleanup expired remember me tokens: %w", result.Error)
+	}
+
+	return nil
+}
+
+func (s *Service) IsRememberMeEnabled() bool {
+	return s.config.Auth.RememberMeEnabled
+}
+
+func (s *Service) InvalidateRememberMeTokens(userID uint) error {
+	if !s.config.Auth.RememberMeEnabled {
+		return ErrRememberMeDisabled
+	}
+
+	if s.db == nil {
+		return fmt.Errorf("database is required for remember me functionality")
+	}
+
+	result := s.db.Where("user_id = ?", userID).Delete(&RememberMeToken{})
+	if result.Error != nil {
+		return fmt.Errorf("failed to invalidate remember me tokens: %w", result.Error)
+	}
+
+	return nil
+}
+
+func (s *Service) GetRememberMeExpiry() time.Duration {
+	return s.config.Auth.RememberMeExpiry
 }
