@@ -642,3 +642,37 @@ func (s *Service) InvalidateRememberMeTokens(userID uint) error {
 func (s *Service) GetRememberMeExpiry() time.Duration {
 	return s.config.Auth.RememberMeExpiry
 }
+
+func (s *Service) GetRememberMeCookieSecure() bool {
+	return s.config.Auth.RememberMeCookieSecure
+}
+
+func (s *Service) GetRememberMeCookieSameSite() string {
+	return s.config.Auth.RememberMeCookieSameSite
+}
+
+func (s *Service) ShouldRotateRememberMeToken() bool {
+	return s.config.Auth.RememberMeRotateOnUse
+}
+
+func (s *Service) RotateRememberMeToken(oldToken string) (*RememberMeToken, error) {
+	if !s.config.Auth.RememberMeEnabled {
+		return nil, ErrRememberMeDisabled
+	}
+
+	rememberToken, err := s.ValidateRememberMeToken(oldToken)
+	if err != nil {
+		return nil, err
+	}
+
+	newToken, err := s.CreateRememberMeToken(rememberToken.UserID)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.db.Delete(rememberToken).Error; err != nil {
+		return nil, fmt.Errorf("failed to delete old remember me token: %w", err)
+	}
+
+	return newToken, nil
+}

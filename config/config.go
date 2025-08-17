@@ -86,9 +86,12 @@ type AuthConfig struct {
 	EmailVerificationTokenLength int           `env:"EMAIL_VERIFICATION_TOKEN_LENGTH" envDefault:"32"`
 	EmailVerificationExpiry      time.Duration `env:"EMAIL_VERIFICATION_EXPIRY" envDefault:"24h"`
 
-	RememberMeEnabled     bool          `env:"REMEMBER_ME_ENABLED" envDefault:"false"`
-	RememberMeTokenLength int           `env:"REMEMBER_ME_TOKEN_LENGTH" envDefault:"32"`
-	RememberMeExpiry      time.Duration `env:"REMEMBER_ME_EXPIRY" envDefault:"720h"`
+	RememberMeEnabled        bool          `env:"REMEMBER_ME_ENABLED" envDefault:"false"`
+	RememberMeTokenLength    int           `env:"REMEMBER_ME_TOKEN_LENGTH" envDefault:"32"`
+	RememberMeExpiry         time.Duration `env:"REMEMBER_ME_EXPIRY" envDefault:"720h"`
+	RememberMeCookieSecure   bool          `env:"REMEMBER_ME_COOKIE_SECURE" envDefault:"true"`
+	RememberMeCookieSameSite string        `env:"REMEMBER_ME_COOKIE_SAME_SITE" envDefault:"strict"`
+	RememberMeRotateOnUse    bool          `env:"REMEMBER_ME_ROTATE_ON_USE" envDefault:"true"`
 }
 
 type TOTPConfig struct {
