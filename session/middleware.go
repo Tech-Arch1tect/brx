@@ -8,7 +8,11 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+type contextKey string
+
 const (
+	sessionManagerContextKey contextKey = "session_manager"
+
 	sessionManagerKey = "session_manager"
 	sessionServiceKey = "session_service"
 )
@@ -31,7 +35,7 @@ func Middleware(manager *Manager) echo.MiddlewareFunc {
 
 			handler := manager.SessionManager.LoadAndSave(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-				ctx := context.WithValue(r.Context(), sessionManagerKey, manager)
+				ctx := context.WithValue(r.Context(), sessionManagerContextKey, manager)
 				c.SetRequest(r.WithContext(ctx))
 				c.Response().Writer = w
 				handlerErr = next(c)
@@ -72,7 +76,7 @@ func GetManager(c echo.Context) *Manager {
 }
 
 func GetManagerFromContext(ctx context.Context) *Manager {
-	if manager := ctx.Value(sessionManagerKey); manager != nil {
+	if manager := ctx.Value(sessionManagerContextKey); manager != nil {
 		return manager.(*Manager)
 	}
 	return nil
