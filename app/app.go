@@ -126,6 +126,7 @@ func New(opts ...options.Option) *App {
 	fxOptions = append(fxOptions, fx.Invoke(func(lc fx.Lifecycle, srv *server.Server) {
 		lc.Append(fx.Hook{
 			OnStart: func(ctx context.Context) error {
+				srv.LogRoutes()
 				go srv.Start()
 				return nil
 			},

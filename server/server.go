@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"sort"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 	"github.com/tech-arch1tect/brx/config"
@@ -111,4 +113,54 @@ func (s *Server) SetRenderer(renderer echo.Renderer) {
 
 func (s *Server) Echo() *echo.Echo {
 	return s.echo
+}
+
+func (s *Server) LogRoutes() {
+	routes := s.echo.Routes()
+	if len(routes) == 0 {
+		log.Printf("No routes registered")
+		return
+	}
+
+	filteredRoutes := make([]*echo.Route, 0)
+	for _, route := range routes {
+		if route.Name == "github.com/labstack/echo/v4.init.func1" {
+			continue
+		}
+		filteredRoutes = append(filteredRoutes, route)
+	}
+
+	sort.Slice(filteredRoutes, func(i, j int) bool {
+		if filteredRoutes[i].Path == filteredRoutes[j].Path {
+			return filteredRoutes[i].Method < filteredRoutes[j].Method
+		}
+		return filteredRoutes[i].Path < filteredRoutes[j].Path
+	})
+
+	var output strings.Builder
+	output.WriteString("\nRegistered Routes:\n")
+
+	for _, route := range filteredRoutes {
+		output.WriteString(fmt.Sprintf("  %-6s %s -> %s\n",
+			route.Method,
+			route.Path,
+			shortenHandlerName(route.Name)))
+	}
+
+	output.WriteString("\n")
+	log.Print(output.String())
+}
+
+func shortenHandlerName(name string) string {
+	if slashIndex := strings.Index(name, "/"); slashIndex != -1 {
+		name = name[slashIndex+1:]
+	}
+
+	if len(name) > 80 {
+		parts := []rune(name)
+		if len(parts) > 80 {
+			return string(parts[:77]) + "..."
+		}
+	}
+	return name
 }
