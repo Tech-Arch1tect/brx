@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 
+	"github.com/tech-arch1tect/brx/services/logging"
 	"github.com/tech-arch1tect/brx/services/templates"
 	"go.uber.org/fx"
 )
@@ -10,18 +11,27 @@ import (
 func NewProvider() fx.Option {
 	return fx.Options(
 		fx.Provide(New),
-		fx.Invoke(func(lc fx.Lifecycle, srv *Server, templateSvc *templates.Service) {
-			if templateSvc != nil {
-				srv.SetRenderer(templateSvc.Renderer())
+		fx.Invoke(func(params struct {
+			fx.In
+			Lifecycle    fx.Lifecycle
+			Server       *Server
+			Logger       *logging.Service
+			TemplatesSvc *templates.Service `optional:"true"`
+		}) {
+			if params.TemplatesSvc != nil {
+				params.Server.SetRenderer(params.TemplatesSvc.Renderer())
 			}
 
-			lc.Append(fx.Hook{
+			params.Server.Echo().Use(logging.RequestLogger(params.Logger))
+
+			params.Lifecycle.Append(fx.Hook{
 				OnStart: func(ctx context.Context) error {
-					go srv.Start()
+					params.Server.LogRoutes()
+					go params.Server.Start()
 					return nil
 				},
 				OnStop: func(ctx context.Context) error {
-					return srv.Shutdown(ctx)
+					return params.Server.Shutdown(ctx)
 				},
 			})
 		}),

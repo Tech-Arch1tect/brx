@@ -35,7 +35,9 @@ type ServerConfig struct {
 }
 
 type LogConfig struct {
-	Level string `env:"LEVEL" envDefault:"info"`
+	Level  string `env:"LEVEL" envDefault:"info"`
+	Format string `env:"FORMAT" envDefault:"json"`
+	Output string `env:"OUTPUT" envDefault:"stdout"`
 }
 
 type TemplatesConfig struct {

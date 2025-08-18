@@ -16,6 +16,7 @@ import (
 	"github.com/tech-arch1tect/brx/server"
 	"github.com/tech-arch1tect/brx/services/auth"
 	"github.com/tech-arch1tect/brx/services/inertia"
+	"github.com/tech-arch1tect/brx/services/logging"
 	"github.com/tech-arch1tect/brx/services/mail"
 	"github.com/tech-arch1tect/brx/services/templates"
 	"github.com/tech-arch1tect/brx/services/totp"
@@ -25,10 +26,10 @@ import (
 )
 
 type App struct {
-	server     *server.Server
 	fx         *fx.App
 	inertiaSvc *inertia.Service
 	db         *gorm.DB
+	server     *server.Server
 }
 
 func New(opts ...options.Option) *App {
@@ -48,14 +49,9 @@ func New(opts ...options.Option) *App {
 		}
 	}
 
-	srv := server.New(cfg)
-
 	var templateSvc *templates.Service
 	if appOpts.EnableTemplates {
 		templateSvc = templates.New(&cfg.Templates)
-		if templateSvc != nil {
-			srv.SetRenderer(templateSvc.Renderer())
-		}
 	}
 
 	var inertiaSvc *inertia.Service
@@ -79,7 +75,8 @@ func New(opts ...options.Option) *App {
 
 	var fxOptions []fx.Option
 	fxOptions = append(fxOptions, fx.Supply(cfg))
-	fxOptions = append(fxOptions, fx.Supply(srv))
+	fxOptions = append(fxOptions, logging.Module)
+	fxOptions = append(fxOptions, server.NewProvider())
 
 	if db != nil {
 		fxOptions = append(fxOptions, fx.Supply(db))
@@ -122,19 +119,6 @@ func New(opts ...options.Option) *App {
 			})
 		}))
 	}
-
-	fxOptions = append(fxOptions, fx.Invoke(func(lc fx.Lifecycle, srv *server.Server) {
-		lc.Append(fx.Hook{
-			OnStart: func(ctx context.Context) error {
-				srv.LogRoutes()
-				go srv.Start()
-				return nil
-			},
-			OnStop: func(ctx context.Context) error {
-				return srv.Shutdown(ctx)
-			},
-		})
-	}))
 
 	if appOpts.EnableSessions {
 		fxOptions = append(fxOptions, fx.Invoke(func(srv *server.Server, sessionMgr *session.Manager) {
@@ -195,16 +179,25 @@ func New(opts ...options.Option) *App {
 		}
 	}
 
+	var appInstance *App
+
+	fxOptions = append(fxOptions, fx.Invoke(func(srv *server.Server) {
+		if appInstance != nil {
+			appInstance.server = srv
+		}
+	}))
+
 	fxOptions = append(fxOptions, fx.NopLogger)
 
 	fxApp := fx.New(fxOptions...)
 
-	return &App{
-		server:     srv,
+	appInstance = &App{
 		fx:         fxApp,
 		inertiaSvc: inertiaSvc,
 		db:         db,
 	}
+
+	return appInstance
 }
 
 func (a *App) Start() {
@@ -221,24 +214,38 @@ func (a *App) Stop() {
 	}
 }
 
+func (a *App) Server() *server.Server {
+	return a.server
+}
+
 func (a *App) Get(path string, handler echo.HandlerFunc) {
-	a.server.Get(path, handler)
+	if a.server != nil {
+		a.server.Get(path, handler)
+	}
 }
 
 func (a *App) Post(path string, handler echo.HandlerFunc) {
-	a.server.Post(path, handler)
+	if a.server != nil {
+		a.server.Post(path, handler)
+	}
 }
 
 func (a *App) Put(path string, handler echo.HandlerFunc) {
-	a.server.Put(path, handler)
+	if a.server != nil {
+		a.server.Put(path, handler)
+	}
 }
 
 func (a *App) Delete(path string, handler echo.HandlerFunc) {
-	a.server.Delete(path, handler)
+	if a.server != nil {
+		a.server.Delete(path, handler)
+	}
 }
 
 func (a *App) Patch(path string, handler echo.HandlerFunc) {
-	a.server.Patch(path, handler)
+	if a.server != nil {
+		a.server.Patch(path, handler)
+	}
 }
 
 func (a *App) Run() {

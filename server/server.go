@@ -2,37 +2,40 @@ package server
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"sort"
 	"strings"
 
 	"github.com/labstack/echo/v4"
 	"github.com/tech-arch1tect/brx/config"
+	"github.com/tech-arch1tect/brx/services/logging"
+	"go.uber.org/zap"
 )
 
 type Server struct {
-	echo *echo.Echo
-	cfg  *config.Config
+	echo   *echo.Echo
+	cfg    *config.Config
+	logger *logging.Service
 }
 
-func New(cfg *config.Config) *Server {
+func New(cfg *config.Config, logger *logging.Service) *Server {
 	e := echo.New()
 	e.HideBanner = false
 
-	configureTrustedProxies(e, cfg.Server.TrustedProxies)
+	configureTrustedProxies(e, cfg.Server.TrustedProxies, logger)
 
 	return &Server{
-		echo: e,
-		cfg:  cfg,
+		echo:   e,
+		cfg:    cfg,
+		logger: logger,
 	}
 }
 
-func configureTrustedProxies(e *echo.Echo, trustedProxies []string) {
+func configureTrustedProxies(e *echo.Echo, trustedProxies []string, logger *logging.Service) {
 
 	if len(trustedProxies) == 0 {
 		e.IPExtractor = echo.ExtractIPDirect()
-		log.Printf("No trusted proxies configured - using direct IP extraction (secure)")
+		logger.Info("No trusted proxies configured - using direct IP extraction (secure)")
 		return
 	}
 
@@ -54,7 +57,7 @@ func configureTrustedProxies(e *echo.Echo, trustedProxies []string) {
 					_, network, _ = net.ParseCIDR(proxy + "/128")
 				}
 			} else {
-				log.Printf("WARNING: Invalid trusted proxy '%s' - skipping", proxy)
+				logger.Warn("invalid trusted proxy - skipping", zap.String("proxy", proxy))
 				continue
 			}
 		}
@@ -66,20 +69,20 @@ func configureTrustedProxies(e *echo.Echo, trustedProxies []string) {
 
 	if len(trustOptions) == 0 {
 		e.IPExtractor = echo.ExtractIPDirect()
-		log.Printf("No valid trusted proxies - using direct IP extraction")
+		logger.Info("no valid trusted proxies - using direct IP extraction")
 		return
 	}
 
 	e.IPExtractor = echo.ExtractIPFromXFFHeader(trustOptions...)
-	log.Printf("Configured trusted proxies: %v", trustedProxies)
+	logger.Info("configured trusted proxies", zap.Strings("proxies", trustedProxies))
 }
 
 func (s *Server) Start() {
 	addr := fmt.Sprintf("%s:%s", s.cfg.Server.Host, s.cfg.Server.Port)
-	log.Printf("Starting brx server on %s", addr)
+	s.logger.Info("starting brx server", zap.String("address", addr))
 
 	if err := s.echo.Start(addr); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+		s.logger.Fatal("failed to start server", zap.Error(err))
 	}
 }
 
@@ -118,7 +121,7 @@ func (s *Server) Echo() *echo.Echo {
 func (s *Server) LogRoutes() {
 	routes := s.echo.Routes()
 	if len(routes) == 0 {
-		log.Printf("No routes registered")
+		s.logger.Info("no routes registered")
 		return
 	}
 
@@ -137,6 +140,10 @@ func (s *Server) LogRoutes() {
 		return filteredRoutes[i].Path < filteredRoutes[j].Path
 	})
 
+	s.logger.Info("routes registered",
+		zap.Int("route_count", len(filteredRoutes)),
+	)
+
 	var output strings.Builder
 	output.WriteString("\nRegistered Routes:\n")
 
@@ -148,7 +155,7 @@ func (s *Server) LogRoutes() {
 	}
 
 	output.WriteString("\n")
-	log.Print(output.String())
+	fmt.Print(output.String())
 }
 
 func shortenHandlerName(name string) string {

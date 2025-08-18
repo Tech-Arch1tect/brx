@@ -5,12 +5,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 	"unicode"
 
 	"github.com/tech-arch1tect/brx/config"
+	"github.com/tech-arch1tect/brx/services/logging"
+	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -41,15 +42,17 @@ type Service struct {
 	config      *config.Config
 	db          *gorm.DB
 	mailService MailService
+	logger      *logging.Service
 }
 
-func NewService(cfg *config.Config, db *gorm.DB) *Service {
+func NewService(cfg *config.Config, db *gorm.DB, logger *logging.Service) *Service {
 	if cfg.Auth.BcryptCost < bcrypt.MinCost || cfg.Auth.BcryptCost > bcrypt.MaxCost {
 		cfg.Auth.BcryptCost = bcrypt.DefaultCost
 	}
 	return &Service{
 		config: cfg,
 		db:     db,
+		logger: logger,
 	}
 }
 
@@ -77,7 +80,7 @@ func NewServiceWithDefaults() *Service {
 			EmailVerificationTokenLength: 32,
 			EmailVerificationExpiry:      24 * time.Hour,
 		},
-	}, nil)
+	}, nil, nil)
 }
 
 func (s *Service) ValidatePassword(password string) error {
@@ -441,10 +444,10 @@ func (s *Service) CleanupExpiredEmailVerificationTokens() error {
 }
 
 func (s *Service) SendEmailVerificationEmail(email, verificationURL string, expiryDuration time.Duration) error {
-	log.Printf("SendEmailVerificationEmail called for: %s", email)
+	s.logger.Info("sending email verification email", zap.String("email", email))
 
 	if s.mailService == nil {
-		log.Printf("Mail service is not configured")
+		s.logger.Warn("mail service is not configured")
 		return fmt.Errorf("mail service is not configured")
 	}
 
@@ -455,42 +458,42 @@ func (s *Service) SendEmailVerificationEmail(email, verificationURL string, expi
 		"AppName":         s.config.App.Name,
 	}
 
-	log.Printf("Mail service configured, sending template with data: %+v", data)
+	s.logger.Info("sending email verification template", zap.String("email", email), zap.String("template", "email_verification"))
 	subject := "Please verify your email address"
 	err := s.mailService.SendTemplate("email_verification", []string{email}, subject, data)
 	if err != nil {
-		log.Printf("Mail service SendTemplate failed: %v", err)
+		s.logger.Error("failed to send email verification template", zap.Error(err), zap.String("email", email))
 	} else {
-		log.Printf("Mail service SendTemplate succeeded for: %s", email)
+		s.logger.Info("email verification template sent successfully", zap.String("email", email))
 	}
 	return err
 }
 
 func (s *Service) RequestEmailVerification(email string) error {
-	log.Printf("RequestEmailVerification called for email: %s", email)
+	s.logger.Info("requesting email verification", zap.String("email", email))
 
 	if !s.config.Auth.EmailVerificationEnabled {
-		log.Printf("Email verification is disabled")
+		s.logger.Warn("email verification is disabled")
 		return ErrEmailVerificationDisabled
 	}
 
-	log.Printf("Creating email verification token for: %s", email)
+	s.logger.Info("creating email verification token", zap.String("email", email))
 	verificationToken, err := s.CreateEmailVerificationToken(email)
 	if err != nil {
-		log.Printf("Failed to create email verification token: %v", err)
+		s.logger.Error("failed to create email verification token", zap.Error(err), zap.String("email", email))
 		return err
 	}
 
 	verificationURL := fmt.Sprintf("%s/auth/verify-email?token=%s", s.config.App.URL, verificationToken.Token)
-	log.Printf("Generated verification URL: %s", verificationURL)
+	s.logger.Info("generated verification URL", zap.String("email", email))
 
-	log.Printf("Sending email verification email to: %s", email)
+	s.logger.Info("sending email verification email", zap.String("email", email))
 	if err := s.SendEmailVerificationEmail(email, verificationURL, s.config.Auth.EmailVerificationExpiry); err != nil {
-		log.Printf("Failed to send email verification email: %v", err)
+		s.logger.Error("failed to send email verification email", zap.Error(err), zap.String("email", email))
 		return fmt.Errorf("failed to send email verification email: %w", err)
 	}
 
-	log.Printf("Email verification email sent successfully to: %s", email)
+	s.logger.Info("email verification email sent successfully", zap.String("email", email))
 	return nil
 }
 
