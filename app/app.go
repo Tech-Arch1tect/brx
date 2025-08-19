@@ -9,8 +9,6 @@ import (
 	"github.com/tech-arch1tect/brx/config"
 	"github.com/tech-arch1tect/brx/database"
 	"github.com/tech-arch1tect/brx/internal/options"
-	"github.com/tech-arch1tect/brx/middleware/csrf"
-	"github.com/tech-arch1tect/brx/middleware/inertiacsrf"
 	"github.com/tech-arch1tect/brx/middleware/inertiashared"
 	"github.com/tech-arch1tect/brx/middleware/ratelimit"
 	"github.com/tech-arch1tect/brx/server"
@@ -139,11 +137,6 @@ func New(opts ...options.Option) *App {
 
 		fxOptions = append(fxOptions, fx.Invoke(func(p SharedPropsParams) {
 			p.Server.Echo().Use(p.InertiaSvc.Middleware())
-
-			if p.Config.CSRF.Enabled {
-				p.Server.Echo().Use(csrf.WithConfig(&p.Config.CSRF))
-				p.Server.Echo().Use(inertiacsrf.Middleware(p.Config))
-			}
 
 			middlewareConfig := inertiashared.Config{
 				AuthEnabled:  true,
