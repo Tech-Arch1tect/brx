@@ -41,6 +41,10 @@ func (s *Service) GetAccessExpirySeconds() int {
 	return int(s.config.JWT.AccessExpiry.Seconds())
 }
 
+func (s *Service) GetRefreshExpirySeconds() int {
+	return int(s.config.JWT.RefreshExpiry.Seconds())
+}
+
 func (s *Service) GenerateToken(userID uint) (string, error) {
 	now := time.Now()
 	claims := Claims{
