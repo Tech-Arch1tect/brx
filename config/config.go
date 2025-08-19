@@ -17,6 +17,7 @@ type Config struct {
 	Database  DatabaseConfig  `envPrefix:"BRX_DATABASE_"`
 	Session   SessionConfig   `envPrefix:"BRX_SESSION_"`
 	Auth      AuthConfig      `envPrefix:"BRX_AUTH_"`
+	JWT       JWTConfig       `envPrefix:"BRX_JWT_"`
 	TOTP      TOTPConfig      `envPrefix:"BRX_TOTP_"`
 	RateLimit RateLimitConfig `envPrefix:"BRX_RATELIMIT_"`
 	CSRF      CSRFConfig      `envPrefix:"BRX_CSRF_"`
@@ -94,6 +95,14 @@ type AuthConfig struct {
 	RememberMeCookieSecure   bool          `env:"REMEMBER_ME_COOKIE_SECURE" envDefault:"true"`
 	RememberMeCookieSameSite string        `env:"REMEMBER_ME_COOKIE_SAME_SITE" envDefault:"strict"`
 	RememberMeRotateOnUse    bool          `env:"REMEMBER_ME_ROTATE_ON_USE" envDefault:"true"`
+}
+
+type JWTConfig struct {
+	SecretKey     string        `env:"SECRET_KEY"`
+	AccessExpiry  time.Duration `env:"ACCESS_EXPIRY" envDefault:"15m"`
+	RefreshExpiry time.Duration `env:"REFRESH_EXPIRY" envDefault:"168h"`
+	Issuer        string        `env:"ISSUER" envDefault:"brx Application"`
+	Algorithm     string        `env:"ALGORITHM" envDefault:"HS256"`
 }
 
 type TOTPConfig struct {

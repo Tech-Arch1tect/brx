@@ -6,6 +6,7 @@ require (
 	github.com/alexedwards/scs/gormstore v0.0.0-20250417082927-ab20b3feb5e9
 	github.com/alexedwards/scs/v2 v2.9.0
 	github.com/caarlos0/env/v10 v10.0.0
+	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/joho/godotenv v1.5.1
 	github.com/labstack/echo/v4 v4.13.4
 	github.com/mileusna/useragent v1.3.5
