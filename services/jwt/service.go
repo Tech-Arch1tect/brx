@@ -20,7 +20,8 @@ var (
 )
 
 type Claims struct {
-	UserID uint `json:"user_id"`
+	UserID    uint   `json:"user_id"`
+	TokenType string `json:"token_type,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -122,6 +123,33 @@ func (s *Service) ValidateToken(tokenString string) (*Claims, error) {
 	}
 
 	return nil, ErrInvalidToken
+}
+
+func (s *Service) GenerateTOTPToken(userID uint) (string, error) {
+	now := time.Now()
+	claims := Claims{
+		UserID:    userID,
+		TokenType: "totp_pending",
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    s.config.JWT.Issuer,
+			Subject:   fmt.Sprintf("%d", userID),
+			Audience:  []string{s.config.JWT.Issuer},
+			ExpiresAt: jwt.NewNumericDate(now.Add(10 * time.Minute)),
+			NotBefore: jwt.NewNumericDate(now),
+			IssuedAt:  jwt.NewNumericDate(now),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte(s.config.JWT.SecretKey))
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Error("failed to sign JWT TOTP token", zap.Error(err))
+		}
+		return "", fmt.Errorf("failed to generate JWT TOTP token: %w", err)
+	}
+
+	return tokenString, nil
 }
 
 func (s *Service) RefreshToken(refreshTokenString string) (string, string, error) {
