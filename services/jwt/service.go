@@ -17,6 +17,7 @@ var (
 	ErrMalformedToken   = errors.New("malformed JWT token")
 	ErrTokenMissingKid  = errors.New("JWT token missing key ID")
 	ErrInvalidSignature = errors.New("invalid JWT token signature")
+	ErrTokenRevoked     = errors.New("JWT token has been revoked")
 )
 
 type Claims struct {
@@ -25,16 +26,27 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
+type RevocationService interface {
+	IsTokenRevoked(tokenString string) (bool, error)
+	RevokeToken(tokenString string) error
+}
+
 type Service struct {
-	config *config.Config
-	logger *logging.Service
+	config            *config.Config
+	logger            *logging.Service
+	revocationService RevocationService
 }
 
 func NewService(cfg *config.Config, logger *logging.Service) *Service {
 	return &Service{
-		config: cfg,
-		logger: logger,
+		config:            cfg,
+		logger:            logger,
+		revocationService: nil,
 	}
+}
+
+func (s *Service) SetRevocationService(revocationService RevocationService) {
+	s.revocationService = revocationService
 }
 
 func (s *Service) GetAccessExpirySeconds() int {
@@ -123,6 +135,22 @@ func (s *Service) ValidateToken(tokenString string) (*Claims, error) {
 	}
 
 	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
+
+		if s.revocationService != nil {
+			revoked, err := s.revocationService.IsTokenRevoked(tokenString)
+			if err != nil {
+				if s.logger != nil {
+					s.logger.Error("failed to check token revocation status", zap.Error(err))
+				}
+
+			} else if revoked {
+				if s.logger != nil {
+					s.logger.Warn("token validation failed - token has been revoked")
+				}
+				return nil, ErrTokenRevoked
+			}
+		}
+
 		return claims, nil
 	}
 
@@ -173,4 +201,35 @@ func (s *Service) RefreshToken(refreshTokenString string) (string, string, error
 	}
 
 	return newAccessToken, newRefreshToken, nil
+}
+
+func (s *Service) RevokeToken(tokenString string) error {
+	if s.revocationService == nil {
+		if s.logger != nil {
+			s.logger.Warn("token revocation requested but revocation service not available")
+		}
+		return nil
+	}
+
+	err := s.revocationService.RevokeToken(tokenString)
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Error("failed to revoke token", zap.Error(err))
+		}
+		return fmt.Errorf("failed to revoke token: %w", err)
+	}
+
+	if s.logger != nil {
+		s.logger.Info("token revoked successfully")
+	}
+
+	return nil
+}
+
+func (s *Service) IsTokenRevoked(tokenString string) (bool, error) {
+	if s.revocationService == nil {
+		return false, nil
+	}
+
+	return s.revocationService.IsTokenRevoked(tokenString)
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/tech-arch1tect/brx/services/inertia"
 	"github.com/tech-arch1tect/brx/services/logging"
 	"github.com/tech-arch1tect/brx/services/mail"
+	"github.com/tech-arch1tect/brx/services/revocation"
 	"github.com/tech-arch1tect/brx/services/templates"
 	"github.com/tech-arch1tect/brx/services/totp"
 	"github.com/tech-arch1tect/brx/session"
@@ -162,6 +163,10 @@ func New(opts ...options.Option) *App {
 
 	if appOpts.EnableTOTP {
 		fxOptions = append(fxOptions, totp.Module)
+	}
+
+	if appOpts.EnableJWTRevocation {
+		fxOptions = append(fxOptions, revocation.Module)
 	}
 
 	fxOptions = append(fxOptions, fx.Provide(ratelimit.ProvideRateLimitStore))

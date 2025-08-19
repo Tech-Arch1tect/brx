@@ -9,19 +9,20 @@ import (
 )
 
 type Config struct {
-	App       AppConfig       `envPrefix:"BRX_APP_"`
-	Server    ServerConfig    `envPrefix:"BRX_SERVER_"`
-	Log       LogConfig       `envPrefix:"BRX_LOG_"`
-	Templates TemplatesConfig `envPrefix:"BRX_TEMPLATES_"`
-	Inertia   InertiaConfig   `envPrefix:"BRX_INERTIA_"`
-	Database  DatabaseConfig  `envPrefix:"BRX_DATABASE_"`
-	Session   SessionConfig   `envPrefix:"BRX_SESSION_"`
-	Auth      AuthConfig      `envPrefix:"BRX_AUTH_"`
-	JWT       JWTConfig       `envPrefix:"BRX_JWT_"`
-	TOTP      TOTPConfig      `envPrefix:"BRX_TOTP_"`
-	RateLimit RateLimitConfig `envPrefix:"BRX_RATELIMIT_"`
-	CSRF      CSRFConfig      `envPrefix:"BRX_CSRF_"`
-	Mail      MailConfig      `envPrefix:"BRX_MAIL_"`
+	App        AppConfig        `envPrefix:"BRX_APP_"`
+	Server     ServerConfig     `envPrefix:"BRX_SERVER_"`
+	Log        LogConfig        `envPrefix:"BRX_LOG_"`
+	Templates  TemplatesConfig  `envPrefix:"BRX_TEMPLATES_"`
+	Inertia    InertiaConfig    `envPrefix:"BRX_INERTIA_"`
+	Database   DatabaseConfig   `envPrefix:"BRX_DATABASE_"`
+	Session    SessionConfig    `envPrefix:"BRX_SESSION_"`
+	Auth       AuthConfig       `envPrefix:"BRX_AUTH_"`
+	JWT        JWTConfig        `envPrefix:"BRX_JWT_"`
+	TOTP       TOTPConfig       `envPrefix:"BRX_TOTP_"`
+	RateLimit  RateLimitConfig  `envPrefix:"BRX_RATELIMIT_"`
+	CSRF       CSRFConfig       `envPrefix:"BRX_CSRF_"`
+	Mail       MailConfig       `envPrefix:"BRX_MAIL_"`
+	Revocation RevocationConfig `envPrefix:"BRX_JWT_REVOCATION_"`
 }
 
 type AppConfig struct {
@@ -137,6 +138,12 @@ type MailConfig struct {
 	FromAddress  string `env:"FROM_ADDRESS"`
 	FromName     string `env:"FROM_NAME"`
 	TemplatesDir string `env:"TEMPLATES_DIR" envDefault:"templates/mail"`
+}
+
+type RevocationConfig struct {
+	Enabled       bool          `env:"ENABLED" envDefault:"false"`
+	Store         string        `env:"STORE" envDefault:"memory"`
+	CleanupPeriod time.Duration `env:"CLEANUP_PERIOD" envDefault:"1h"`
 }
 
 type CountingMode string

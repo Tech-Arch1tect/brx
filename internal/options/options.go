@@ -6,17 +6,18 @@ import (
 )
 
 type Options struct {
-	Config          *config.Config
-	EnableTemplates bool
-	EnableInertia   bool
-	EnableDatabase  bool
-	DatabaseModels  []any
-	EnableSessions  bool
-	SessionOptions  *session.Options
-	EnableAuth      bool
-	EnableMail      bool
-	EnableTOTP      bool
-	ExtraFxOptions  []any
+	Config              *config.Config
+	EnableTemplates     bool
+	EnableInertia       bool
+	EnableDatabase      bool
+	DatabaseModels      []any
+	EnableSessions      bool
+	SessionOptions      *session.Options
+	EnableAuth          bool
+	EnableMail          bool
+	EnableTOTP          bool
+	EnableJWTRevocation bool
+	ExtraFxOptions      []any
 }
 
 type Option func(*Options)
@@ -70,6 +71,12 @@ func WithMail() Option {
 func WithTOTP() Option {
 	return func(opts *Options) {
 		opts.EnableTOTP = true
+	}
+}
+
+func WithJWTRevocation() Option {
+	return func(opts *Options) {
+		opts.EnableJWTRevocation = true
 	}
 }
 
