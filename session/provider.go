@@ -81,7 +81,21 @@ func ProvideSessionService(db *gorm.DB, manager *Manager) SessionService {
 	return NewSessionService(db, manager)
 }
 
+type OptionalJWTService struct {
+	fx.In
+	JWTService JWTRevocationService `optional:"true"`
+}
+
+func WireJWTRevocationService(sessionSvc SessionService, optJWTSvc OptionalJWTService) {
+	if sessionSvc != nil && optJWTSvc.JWTService != nil {
+		if svc, ok := sessionSvc.(*sessionService); ok {
+			svc.SetJWTRevocationService(optJWTSvc.JWTService)
+		}
+	}
+}
+
 var Module = fx.Module("session",
 	fx.Provide(ProvideSessionManager),
 	fx.Provide(ProvideSessionService),
+	fx.Invoke(WireJWTRevocationService),
 )

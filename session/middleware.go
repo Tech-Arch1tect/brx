@@ -105,7 +105,7 @@ func SessionServiceMiddleware(service SessionService) echo.MiddlewareFunc {
 									ipAddress := c.RealIP()
 									userAgent := c.Request().UserAgent()
 									expiresAt := time.Now().Add(manager.config.MaxAge)
-									_ = service.TrackSession(userID, token, ipAddress, userAgent, expiresAt)
+									_ = service.TrackSession(userID, token, SessionTypeWeb, ipAddress, userAgent, expiresAt)
 								}
 							}
 						}()

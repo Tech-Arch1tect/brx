@@ -48,7 +48,7 @@ func LoginWithTOTPService(c echo.Context, userID any, totpSvc TOTPChecker) {
 				userAgent := c.Request().UserAgent()
 				expiresAt := time.Now().Add(manager.config.MaxAge)
 
-				_ = service.TrackSession(userIDUint, token, ipAddress, userAgent, expiresAt)
+				_ = service.TrackSession(userIDUint, token, SessionTypeWeb, ipAddress, userAgent, expiresAt)
 			}
 		}
 	}
