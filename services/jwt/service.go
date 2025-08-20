@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/tech-arch1tect/brx/config"
 	"github.com/tech-arch1tect/brx/services/logging"
 	"go.uber.org/zap"
@@ -23,6 +24,7 @@ var (
 type Claims struct {
 	UserID    uint   `json:"user_id"`
 	TokenType string `json:"token_type,omitempty"`
+	JTI       string `json:"jti"`
 	jwt.RegisteredClaims
 }
 
@@ -59,9 +61,12 @@ func (s *Service) GetRefreshExpirySeconds() int {
 
 func (s *Service) GenerateToken(userID uint) (string, error) {
 	now := time.Now()
+	jti := uuid.New().String()
 	claims := Claims{
 		UserID: userID,
+		JTI:    jti,
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        jti,
 			Issuer:    s.config.JWT.Issuer,
 			Subject:   fmt.Sprintf("%d", userID),
 			Audience:  []string{s.config.JWT.Issuer},
@@ -85,9 +90,12 @@ func (s *Service) GenerateToken(userID uint) (string, error) {
 
 func (s *Service) GenerateRefreshToken(userID uint) (string, error) {
 	now := time.Now()
+	jti := uuid.New().String()
 	claims := Claims{
 		UserID: userID,
+		JTI:    jti,
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        jti,
 			Issuer:    s.config.JWT.Issuer,
 			Subject:   fmt.Sprintf("%d", userID),
 			Audience:  []string{s.config.JWT.Issuer},
@@ -168,10 +176,13 @@ func (s *Service) ValidateToken(tokenString string) (*Claims, error) {
 
 func (s *Service) GenerateTOTPToken(userID uint) (string, error) {
 	now := time.Now()
+	jti := uuid.New().String()
 	claims := Claims{
 		UserID:    userID,
 		TokenType: "totp_pending",
+		JTI:       jti,
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        jti,
 			Issuer:    s.config.JWT.Issuer,
 			Subject:   fmt.Sprintf("%d", userID),
 			Audience:  []string{s.config.JWT.Issuer},
