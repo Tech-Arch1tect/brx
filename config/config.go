@@ -1,7 +1,9 @@
 package config
 
 import (
+	"errors"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/caarlos0/env/v10"
@@ -159,5 +161,31 @@ func LoadConfig(cfg any) error {
 		log.Printf("No .env file found: %v", err)
 	}
 
-	return env.Parse(cfg)
+	if err := env.Parse(cfg); err != nil {
+		return err
+	}
+
+	if config, ok := cfg.(*Config); ok {
+		if err := validateJWTConfig(&config.JWT); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateJWTConfig(jwt *JWTConfig) error {
+	if len(jwt.SecretKey) < 32 {
+		return errors.New("JWT secret key must be at least 32 characters long")
+	}
+
+	lowerSecret := strings.ToLower(jwt.SecretKey)
+	weakPatterns := []string{"password", "secret", "change", "test", "example", "default"}
+	for _, pattern := range weakPatterns {
+		if strings.Contains(lowerSecret, pattern) {
+			return errors.New("JWT secret key contains weak patterns - please use a strong, random key")
+		}
+	}
+
+	return nil
 }
