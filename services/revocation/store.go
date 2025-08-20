@@ -22,14 +22,14 @@ type RevokedToken struct {
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `json:"deleted_at" gorm:"index"`
-	Token     string         `json:"token" gorm:"uniqueIndex;not null"`
+	JTI       string         `json:"jti" gorm:"uniqueIndex;size:50;not null"`
 	ExpiresAt time.Time      `json:"expires_at" gorm:"not null"`
 }
 
 type Store interface {
-	RevokeToken(token string, expiresAt time.Time) error
+	RevokeToken(jti string, expiresAt time.Time) error
 
-	IsRevoked(token string) (bool, error)
+	IsRevoked(jti string) (bool, error)
 
 	CleanupExpiredTokens() error
 
@@ -41,58 +41,58 @@ type Store interface {
 }
 
 type MemoryStore struct {
-	mu      sync.RWMutex
-	tokens  map[string]time.Time
-	userMap map[uint][]string
-	db      *gorm.DB
-	logger  *logging.Service
+	mu            sync.RWMutex
+	revokedTokens map[string]time.Time // JTI -> expiry time
+	userTokens    map[uint][]string    // User ID -> JTI list
+	db            *gorm.DB
+	logger        *logging.Service
 }
 
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
-		tokens:  make(map[string]time.Time),
-		userMap: make(map[uint][]string),
+		revokedTokens: make(map[string]time.Time),
+		userTokens:    make(map[uint][]string),
 	}
 }
 
 func NewMemoryStoreWithDB(db *gorm.DB, logger *logging.Service) *MemoryStore {
 	return &MemoryStore{
-		tokens:  make(map[string]time.Time),
-		userMap: make(map[uint][]string),
-		db:      db,
-		logger:  logger,
+		revokedTokens: make(map[string]time.Time),
+		userTokens:    make(map[uint][]string),
+		db:            db,
+		logger:        logger,
 	}
 }
 
-func (m *MemoryStore) RevokeToken(token string, expiresAt time.Time) error {
+func (m *MemoryStore) RevokeToken(jti string, expiresAt time.Time) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.tokens[token] = expiresAt
+	m.revokedTokens[jti] = expiresAt
 
 	if m.logger != nil {
-		m.logger.Info("token revoked in memory",
-			zap.String("token_hash", hashToken(token)),
+		m.logger.Info("token revoked by JTI in memory",
+			zap.String("jti", jti),
 			zap.Time("expires_at", expiresAt),
-			zap.Int("total_memory_tokens", len(m.tokens)))
+			zap.Int("total_revoked_tokens", len(m.revokedTokens)))
 	}
 
 	if m.db != nil {
 		revokedToken := RevokedToken{
-			Token:     token,
+			JTI:       jti,
 			ExpiresAt: expiresAt,
 		}
 		if err := m.db.Create(&revokedToken).Error; err != nil {
 			if m.logger != nil {
-				m.logger.Error("failed to save revoked token to database",
-					zap.String("token_hash", hashToken(token)),
+				m.logger.Error("failed to save revoked JTI to database",
+					zap.String("jti", jti),
 					zap.Error(err))
 			}
 			return err
 		}
 		if m.logger != nil {
-			m.logger.Info("token saved to database",
-				zap.String("token_hash", hashToken(token)),
+			m.logger.Info("JTI saved to database",
+				zap.String("jti", jti),
 				zap.Time("expires_at", expiresAt))
 		}
 	}
@@ -100,35 +100,35 @@ func (m *MemoryStore) RevokeToken(token string, expiresAt time.Time) error {
 	return nil
 }
 
-func (m *MemoryStore) IsRevoked(token string) (bool, error) {
+func (m *MemoryStore) IsRevoked(jti string) (bool, error) {
 	m.mu.RLock()
-	expiresAt, exists := m.tokens[token]
+	expiresAt, exists := m.revokedTokens[jti]
 	m.mu.RUnlock()
 
 	if !exists {
 		if m.logger != nil {
-			m.logger.Debug("token not found in revocation list",
-				zap.String("token_hash", hashToken(token)))
+			m.logger.Debug("JTI not found in revocation list",
+				zap.String("jti", jti))
 		}
 		return false, nil
 	}
 
 	if time.Now().After(expiresAt) {
 		m.mu.Lock()
-		delete(m.tokens, token)
+		delete(m.revokedTokens, jti)
 		m.mu.Unlock()
 
 		if m.logger != nil {
-			m.logger.Info("expired token removed from memory during lookup",
-				zap.String("token_hash", hashToken(token)),
+			m.logger.Info("expired JTI removed from memory during lookup",
+				zap.String("jti", jti),
 				zap.Time("expired_at", expiresAt))
 		}
 		return false, nil
 	}
 
 	if m.logger != nil {
-		m.logger.Debug("token found in revocation list",
-			zap.String("token_hash", hashToken(token)),
+		m.logger.Debug("JTI found in revocation list",
+			zap.String("jti", jti),
 			zap.Time("expires_at", expiresAt))
 	}
 
@@ -140,24 +140,24 @@ func (m *MemoryStore) CleanupExpiredTokens() error {
 	defer m.mu.Unlock()
 
 	now := time.Now()
-	expiredCount := 0
+	expiredJTICount := 0
 
-	for token, expiresAt := range m.tokens {
+	for jti, expiresAt := range m.revokedTokens {
 		if now.After(expiresAt) {
-			delete(m.tokens, token)
-			expiredCount++
+			delete(m.revokedTokens, jti)
+			expiredJTICount++
 			if m.logger != nil {
-				m.logger.Debug("expired token cleaned from memory",
-					zap.String("token_hash", hashToken(token)),
+				m.logger.Debug("expired JTI cleaned from memory",
+					zap.String("jti", jti),
 					zap.Time("expired_at", expiresAt))
 			}
 		}
 	}
 
-	if m.logger != nil && expiredCount > 0 {
-		m.logger.Info("cleaned up expired tokens from memory",
-			zap.Int("expired_count", expiredCount),
-			zap.Int("remaining_tokens", len(m.tokens)))
+	if m.logger != nil && expiredJTICount > 0 {
+		m.logger.Info("cleaned up expired JTIs from memory",
+			zap.Int("expired_jtis", expiredJTICount),
+			zap.Int("remaining_revoked_tokens", len(m.revokedTokens)))
 	}
 
 	return nil
@@ -201,20 +201,20 @@ func (m *MemoryStore) LoadFromDatabase() error {
 
 	loadedCount := 0
 	for _, token := range revokedTokens {
-		m.tokens[token.Token] = token.ExpiresAt
+		m.revokedTokens[token.JTI] = token.ExpiresAt
 		loadedCount++
 		if m.logger != nil {
-			m.logger.Debug("token loaded into memory from database",
-				zap.String("token_hash", hashToken(token.Token)),
+			m.logger.Debug("JTI loaded into memory from database",
+				zap.String("jti", token.JTI),
 				zap.Time("expires_at", token.ExpiresAt))
 		}
 	}
 
 	if m.logger != nil {
-		m.logger.Info("tokens loaded from database",
+		m.logger.Info("JTIs loaded from database",
 			zap.Int64("total_in_db", totalCount),
 			zap.Int("loaded_count", loadedCount),
-			zap.Int("total_memory_tokens", len(m.tokens)))
+			zap.Int("total_memory_tokens", len(m.revokedTokens)))
 	}
 
 	var expiredCount int64
@@ -250,37 +250,37 @@ func (m *MemoryStore) SaveToDatabase() error {
 	var tokensToSave []RevokedToken
 	expiredInMemory := 0
 
-	for token, expiresAt := range m.tokens {
+	for jti, expiresAt := range m.revokedTokens {
 		if now.Before(expiresAt) {
 			tokensToSave = append(tokensToSave, RevokedToken{
-				Token:     token,
+				JTI:       jti,
 				ExpiresAt: expiresAt,
 			})
 			if m.logger != nil {
-				m.logger.Debug("token prepared for database save",
-					zap.String("token_hash", hashToken(token)),
+				m.logger.Debug("JTI prepared for database save",
+					zap.String("jti", jti),
 					zap.Time("expires_at", expiresAt))
 			}
 		} else {
 			expiredInMemory++
 			if m.logger != nil {
-				m.logger.Debug("expired token skipped during save",
-					zap.String("token_hash", hashToken(token)),
+				m.logger.Debug("expired JTI skipped during save",
+					zap.String("jti", jti),
 					zap.Time("expired_at", expiresAt))
 			}
 		}
 	}
 
 	if m.logger != nil {
-		m.logger.Info("saving tokens to database",
-			zap.Int("total_memory_tokens", len(m.tokens)),
-			zap.Int("active_tokens_to_save", len(tokensToSave)),
+		m.logger.Info("saving JTIs to database",
+			zap.Int("total_memory_tokens", len(m.revokedTokens)),
+			zap.Int("active_jtis_to_save", len(tokensToSave)),
 			zap.Int("expired_in_memory", expiredInMemory))
 	}
 
 	if len(tokensToSave) == 0 {
 		if m.logger != nil {
-			m.logger.Info("no active tokens to save to database")
+			m.logger.Info("no active JTIs to save to database")
 		}
 		return nil
 	}
@@ -325,29 +325,29 @@ func (m *MemoryStore) SaveToDatabase() error {
 		if err := tx.Create(&token).Error; err != nil {
 			tx.Rollback()
 			if m.logger != nil {
-				m.logger.Error("failed to save token to database",
-					zap.String("token_hash", hashToken(token.Token)),
+				m.logger.Error("failed to save JTI to database",
+					zap.String("jti", token.JTI),
 					zap.Error(err))
 			}
 			return err
 		}
 		savedCount++
 		if m.logger != nil {
-			m.logger.Debug("token saved to database",
-				zap.String("token_hash", hashToken(token.Token)),
+			m.logger.Debug("JTI saved to database",
+				zap.String("jti", token.JTI),
 				zap.Time("expires_at", token.ExpiresAt))
 		}
 	}
 
 	if err := tx.Commit().Error; err != nil {
 		if m.logger != nil {
-			m.logger.Error("failed to commit token save transaction", zap.Error(err))
+			m.logger.Error("failed to commit JTI save transaction", zap.Error(err))
 		}
 		return err
 	}
 
 	if m.logger != nil {
-		m.logger.Info("successfully saved tokens to database",
+		m.logger.Info("successfully saved JTIs to database",
 			zap.Int("saved_count", savedCount))
 	}
 

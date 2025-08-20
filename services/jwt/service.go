@@ -29,8 +29,8 @@ type Claims struct {
 }
 
 type RevocationService interface {
-	IsTokenRevoked(tokenString string) (bool, error)
-	RevokeToken(tokenString string) error
+	IsTokenRevoked(jti string) (bool, error)
+	RevokeToken(jti string, expiresAt time.Time) error
 }
 
 type Service struct {
@@ -154,16 +154,18 @@ func (s *Service) ValidateToken(tokenString string) (*Claims, error) {
 	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
 
 		if s.revocationService != nil {
-			revoked, err := s.revocationService.IsTokenRevoked(tokenString)
+			revoked, err := s.revocationService.IsTokenRevoked(claims.JTI)
 			if err != nil {
 				if s.logger != nil {
-					s.logger.Error("revocation check failed - denying access for security", zap.Error(err))
+					s.logger.Error("JTI revocation check failed - denying access for security",
+						zap.String("jti", claims.JTI), zap.Error(err))
 				}
 				return nil, errors.New("token validation failed")
 			}
 			if revoked {
 				if s.logger != nil {
-					s.logger.Warn("token validation failed - token has been revoked")
+					s.logger.Warn("token validation failed - token JTI has been revoked",
+						zap.String("jti", claims.JTI))
 				}
 				return nil, ErrTokenRevoked
 			}
@@ -224,33 +226,50 @@ func (s *Service) RefreshToken(refreshTokenString string) (string, string, error
 	return newAccessToken, newRefreshToken, nil
 }
 
-func (s *Service) RevokeToken(tokenString string) error {
+func (s *Service) ExtractJTI(tokenString string) (string, error) {
+	token, _, err := new(jwt.Parser).ParseUnverified(tokenString, &Claims{})
+	if err != nil {
+		return "", fmt.Errorf("failed to parse token: %w", err)
+	}
+
+	if claims, ok := token.Claims.(*Claims); ok && claims.JTI != "" {
+		return claims.JTI, nil
+	}
+
+	if regClaims, ok := token.Claims.(*jwt.RegisteredClaims); ok && regClaims.ID != "" {
+		return regClaims.ID, nil
+	}
+
+	return "", errors.New("token missing JTI claim")
+}
+
+func (s *Service) RevokeToken(jti string, expiresAt time.Time) error {
 	if s.revocationService == nil {
 		if s.logger != nil {
-			s.logger.Warn("token revocation requested but revocation service not available")
+			s.logger.Warn("token revocation by JTI requested but revocation service not available")
 		}
 		return nil
 	}
 
-	err := s.revocationService.RevokeToken(tokenString)
+	err := s.revocationService.RevokeToken(jti, expiresAt)
 	if err != nil {
 		if s.logger != nil {
-			s.logger.Error("failed to revoke token", zap.Error(err))
+			s.logger.Error("failed to revoke token by JTI", zap.String("jti", jti), zap.Error(err))
 		}
-		return fmt.Errorf("failed to revoke token: %w", err)
+		return fmt.Errorf("failed to revoke token by JTI: %w", err)
 	}
 
 	if s.logger != nil {
-		s.logger.Info("token revoked successfully")
+		s.logger.Info("token revoked successfully by JTI", zap.String("jti", jti))
 	}
 
 	return nil
 }
 
-func (s *Service) IsTokenRevoked(tokenString string) (bool, error) {
+func (s *Service) IsTokenRevoked(jti string) (bool, error) {
 	if s.revocationService == nil {
 		return false, nil
 	}
 
-	return s.revocationService.IsTokenRevoked(tokenString)
+	return s.revocationService.IsTokenRevoked(jti)
 }

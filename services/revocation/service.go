@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/tech-arch1tect/brx/config"
 	"github.com/tech-arch1tect/brx/services/logging"
 	"go.uber.org/zap"
@@ -31,55 +30,39 @@ func NewService(cfg *config.Config, store Store, logger *logging.Service) *Servi
 	}
 }
 
-func (s *Service) RevokeToken(tokenString string) error {
+func (s *Service) RevokeToken(jti string, expiresAt time.Time) error {
 	if s.store == nil {
 		return ErrStoreNotConfigured
 	}
 
-	token, _, err := new(jwt.Parser).ParseUnverified(tokenString, &jwt.RegisteredClaims{})
+	err := s.store.RevokeToken(jti, expiresAt)
 	if err != nil {
 		if s.logger != nil {
-			s.logger.Warn("failed to parse token for revocation", zap.Error(err))
+			s.logger.Error("failed to revoke token by JTI", zap.String("jti", jti), zap.Error(err))
 		}
-		return ErrInvalidToken
-	}
-
-	claims, ok := token.Claims.(*jwt.RegisteredClaims)
-	if !ok || claims.ExpiresAt == nil {
-		if s.logger != nil {
-			s.logger.Warn("token missing expiry claims")
-		}
-		return ErrInvalidToken
-	}
-
-	expiresAt := claims.ExpiresAt.Time
-	err = s.store.RevokeToken(tokenString, expiresAt)
-	if err != nil {
-		if s.logger != nil {
-			s.logger.Error("failed to revoke token", zap.Error(err))
-		}
-		return fmt.Errorf("failed to revoke token: %w", err)
+		return fmt.Errorf("failed to revoke token by JTI: %w", err)
 	}
 
 	if s.logger != nil {
-		s.logger.Info("token revoked successfully",
-			zap.String("token_expires_at", expiresAt.Format(time.RFC3339)))
+		s.logger.Info("token revoked successfully by JTI",
+			zap.String("jti", jti),
+			zap.String("expires_at", expiresAt.Format(time.RFC3339)))
 	}
 
 	return nil
 }
 
-func (s *Service) IsTokenRevoked(tokenString string) (bool, error) {
+func (s *Service) IsTokenRevoked(jti string) (bool, error) {
 	if s.store == nil {
 		return false, ErrStoreNotConfigured
 	}
 
-	revoked, err := s.store.IsRevoked(tokenString)
+	revoked, err := s.store.IsRevoked(jti)
 	if err != nil {
 		if s.logger != nil {
-			s.logger.Error("failed to check token revocation status", zap.Error(err))
+			s.logger.Error("failed to check JTI revocation status", zap.String("jti", jti), zap.Error(err))
 		}
-		return false, fmt.Errorf("failed to check revocation status: %w", err)
+		return false, fmt.Errorf("failed to check JTI revocation status: %w", err)
 	}
 
 	return revoked, nil

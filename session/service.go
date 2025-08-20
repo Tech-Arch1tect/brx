@@ -10,7 +10,7 @@ import (
 )
 
 type JWTRevocationService interface {
-	RevokeToken(tokenString string) error
+	RevokeToken(jti string, expiresAt time.Time) error
 }
 
 type sessionService struct {
@@ -46,49 +46,42 @@ func (s *sessionService) TrackSession(userID uint, token string, sessionType Ses
 	return s.db.Create(&session).Error
 }
 
-func (s *sessionService) TrackJWTSession(userID uint, accessToken, refreshToken string, ipAddress, userAgent string, expiresAt time.Time) error {
-	sessionToken := s.generateSessionToken(refreshToken)
-
+func (s *sessionService) TrackJWTSessionWithJTI(userID uint, accessJTI, refreshJTI string, ipAddress, userAgent string, expiresAt time.Time) error {
+	sessionToken := s.generateSessionToken(refreshJTI)
 	session := UserSession{
-		UserID:       userID,
-		Token:        sessionToken,
-		Type:         SessionTypeJWT,
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		IPAddress:    ipAddress,
-		UserAgent:    userAgent,
-		CreatedAt:    time.Now(),
-		LastUsed:     time.Now(),
-		ExpiresAt:    expiresAt,
+		UserID:          userID,
+		Token:           sessionToken,
+		Type:            SessionTypeJWT,
+		AccessTokenJTI:  accessJTI,
+		RefreshTokenJTI: refreshJTI,
+		IPAddress:       ipAddress,
+		UserAgent:       userAgent,
+		CreatedAt:       time.Now(),
+		LastUsed:        time.Now(),
+		ExpiresAt:       expiresAt,
 	}
-
 	return s.db.Create(&session).Error
 }
 
-func (s *sessionService) GetJWTSessionByRefreshToken(refreshToken string) (*UserSession, error) {
-	sessionToken := s.generateSessionToken(refreshToken)
-
+func (s *sessionService) GetJWTSessionByRefreshJTI(refreshJTI string) (*UserSession, error) {
 	var session UserSession
-	err := s.db.Where("token = ? AND type = ?", sessionToken, SessionTypeJWT).First(&session).Error
+	err := s.db.Where("refresh_token_jti = ? AND type = ?", refreshJTI, SessionTypeJWT).First(&session).Error
 	if err != nil {
 		return nil, err
 	}
-
 	return &session, nil
 }
 
-func (s *sessionService) UpdateJWTSession(oldRefreshToken, newAccessToken, newRefreshToken string, expiresAt time.Time) error {
-	oldSessionToken := s.generateSessionToken(oldRefreshToken)
-	newSessionToken := s.generateSessionToken(newRefreshToken)
-
+func (s *sessionService) UpdateJWTSession(oldRefreshJTI, newAccessJTI, newRefreshJTI string, expiresAt time.Time) error {
+	newSessionToken := s.generateSessionToken(newRefreshJTI)
 	return s.db.Model(&UserSession{}).
-		Where("token = ? AND type = ?", oldSessionToken, SessionTypeJWT).
+		Where("refresh_token_jti = ? AND type = ?", oldRefreshJTI, SessionTypeJWT).
 		Updates(map[string]any{
-			"token":         newSessionToken,
-			"access_token":  newAccessToken,
-			"refresh_token": newRefreshToken,
-			"expires_at":    expiresAt,
-			"last_used":     time.Now(),
+			"token":             newSessionToken,
+			"access_token_jti":  newAccessJTI,
+			"refresh_token_jti": newRefreshJTI,
+			"expires_at":        expiresAt,
+			"last_used":         time.Now(),
 		}).Error
 }
 
@@ -133,11 +126,11 @@ func (s *sessionService) RevokeSession(userID uint, sessionID uint) error {
 
 	if session.Type == SessionTypeJWT && s.jwtRevocation != nil {
 
-		if session.AccessToken != "" {
-			_ = s.jwtRevocation.RevokeToken(session.AccessToken)
+		if session.AccessTokenJTI != "" {
+			_ = s.jwtRevocation.RevokeToken(session.AccessTokenJTI, session.ExpiresAt)
 		}
-		if session.RefreshToken != "" {
-			_ = s.jwtRevocation.RevokeToken(session.RefreshToken)
+		if session.RefreshTokenJTI != "" {
+			_ = s.jwtRevocation.RevokeToken(session.RefreshTokenJTI, session.ExpiresAt)
 		}
 	}
 
@@ -165,11 +158,11 @@ func (s *sessionService) RevokeAllOtherSessions(userID uint, currentToken string
 
 	for _, session := range sessions {
 		if session.Type == SessionTypeJWT && s.jwtRevocation != nil {
-			if session.AccessToken != "" {
-				_ = s.jwtRevocation.RevokeToken(session.AccessToken)
+			if session.AccessTokenJTI != "" {
+				_ = s.jwtRevocation.RevokeToken(session.AccessTokenJTI, session.ExpiresAt)
 			}
-			if session.RefreshToken != "" {
-				_ = s.jwtRevocation.RevokeToken(session.RefreshToken)
+			if session.RefreshTokenJTI != "" {
+				_ = s.jwtRevocation.RevokeToken(session.RefreshTokenJTI, session.ExpiresAt)
 			}
 		}
 
