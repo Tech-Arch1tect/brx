@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/tech-arch1tect/brx/config"
+	"github.com/tech-arch1tect/brx/services/jwt"
 	"github.com/tech-arch1tect/brx/services/logging"
 	"github.com/tech-arch1tect/brx/session"
 	"go.uber.org/fx"
@@ -43,6 +44,10 @@ func ProvideRevocationAsSessionInterface(svc *Service) session.JWTRevocationServ
 	return svc
 }
 
+func ProvideRevocationAsJWTInterface(svc *Service) jwt.RevocationService {
+	return svc
+}
+
 type OptionalRevocationService struct {
 	fx.In
 	RevocationService *Service `optional:"true"`
@@ -57,5 +62,6 @@ func StartCleanupWorkerIfEnabled(cfg *config.Config, optRevocationSvc OptionalRe
 var Module = fx.Options(
 	fx.Provide(ProvideRevocationService),
 	fx.Provide(ProvideRevocationAsSessionInterface),
+	fx.Provide(ProvideRevocationAsJWTInterface),
 	fx.Invoke(StartCleanupWorkerIfEnabled),
 )
