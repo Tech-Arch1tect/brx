@@ -111,9 +111,18 @@ func (s *Service) GenerateRefreshToken(userID uint) (string, error) {
 
 func (s *Service) ValidateToken(tokenString string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (any, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		if token.Method.Alg() == "none" {
+			return nil, errors.New("'none' algorithm is not allowed")
 		}
+
+		if token.Method.Alg() != "HS256" {
+			return nil, fmt.Errorf("unexpected algorithm: expected HS256, got %s", token.Method.Alg())
+		}
+
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("invalid algorithm family: %v", token.Header["alg"])
+		}
+
 		return []byte(s.config.JWT.SecretKey), nil
 	})
 
