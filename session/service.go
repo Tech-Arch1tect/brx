@@ -153,21 +153,28 @@ func (s *sessionService) RevokeSession(userID uint, sessionID uint) error {
 
 func (s *sessionService) RevokeAllOtherSessions(userID uint, currentToken string) error {
 
-	var tokens []string
-	err := s.db.Model(&UserSession{}).
-		Where("user_id = ? AND token != ?", userID, currentToken).
-		Pluck("token", &tokens).Error
+	var sessions []UserSession
+	err := s.db.Where("user_id = ? AND token != ?", userID, currentToken).Find(&sessions).Error
 	if err != nil {
 		return err
 	}
 
-	if len(tokens) == 0 {
+	if len(sessions) == 0 {
 		return nil
 	}
 
-	if s.sessionManager != nil && s.sessionManager.SessionManager.Store != nil {
-		for _, token := range tokens {
-			err = s.sessionManager.SessionManager.Store.Delete(token)
+	for _, session := range sessions {
+		if session.Type == SessionTypeJWT && s.jwtRevocation != nil {
+			if session.AccessToken != "" {
+				_ = s.jwtRevocation.RevokeToken(session.AccessToken)
+			}
+			if session.RefreshToken != "" {
+				_ = s.jwtRevocation.RevokeToken(session.RefreshToken)
+			}
+		}
+
+		if session.Type == SessionTypeWeb && s.sessionManager != nil && s.sessionManager.SessionManager.Store != nil {
+			err = s.sessionManager.SessionManager.Store.Delete(session.Token)
 			if err != nil {
 				return err
 			}
