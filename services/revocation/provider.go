@@ -38,14 +38,9 @@ func ProvideStore(cfg *config.Config, logger *logging.Service, optDB OptionalDB)
 	}
 }
 
-func ProvideRevocationService(cfg *config.Config, logger *logging.Service, optDB OptionalDB) (*Service, error) {
+func ProvideRevocationService(cfg *config.Config, logger *logging.Service, optDB OptionalDB, store Store) (*Service, error) {
 	if !cfg.Revocation.Enabled {
 		return nil, nil
-	}
-
-	store, err := ProvideStore(cfg, logger, optDB)
-	if err != nil {
-		return nil, err
 	}
 
 	if store == nil {
