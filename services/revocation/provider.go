@@ -5,10 +5,11 @@ import (
 
 	"github.com/tech-arch1tect/brx/config"
 	"github.com/tech-arch1tect/brx/services/logging"
+	"github.com/tech-arch1tect/brx/session"
 	"go.uber.org/fx"
 )
 
-func ProvideStore(cfg *config.Config) (Store, error) {
+func ProvideStore(cfg *config.Config, logger *logging.Service) (Store, error) {
 	if !cfg.Revocation.Enabled {
 		return nil, nil
 	}
@@ -26,7 +27,7 @@ func ProvideRevocationService(cfg *config.Config, logger *logging.Service) (*Ser
 		return nil, nil
 	}
 
-	store, err := ProvideStore(cfg)
+	store, err := ProvideStore(cfg, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -38,6 +39,10 @@ func ProvideRevocationService(cfg *config.Config, logger *logging.Service) (*Ser
 	return NewService(cfg, store, logger), nil
 }
 
+func ProvideRevocationAsSessionInterface(svc *Service) session.JWTRevocationService {
+	return svc
+}
+
 type OptionalRevocationService struct {
 	fx.In
 	RevocationService *Service `optional:"true"`
@@ -45,12 +50,12 @@ type OptionalRevocationService struct {
 
 func StartCleanupWorkerIfEnabled(cfg *config.Config, optRevocationSvc OptionalRevocationService) {
 	if optRevocationSvc.RevocationService != nil {
-
 		optRevocationSvc.RevocationService.StartCleanupWorker(cfg.Revocation.CleanupPeriod)
 	}
 }
 
 var Module = fx.Options(
 	fx.Provide(ProvideRevocationService),
+	fx.Provide(ProvideRevocationAsSessionInterface),
 	fx.Invoke(StartCleanupWorkerIfEnabled),
 )
