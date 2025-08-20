@@ -143,7 +143,7 @@ type MailConfig struct {
 }
 
 type RevocationConfig struct {
-	Enabled       bool          `env:"ENABLED" envDefault:"false"`
+	Enabled       bool          `env:"ENABLED" envDefault:"true"`
 	Store         string        `env:"STORE" envDefault:"memory"`
 	CleanupPeriod time.Duration `env:"CLEANUP_PERIOD" envDefault:"1h"`
 }
