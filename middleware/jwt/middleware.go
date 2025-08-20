@@ -32,16 +32,7 @@ func RequireJWT(jwtService *jwt.Service) echo.MiddlewareFunc {
 
 			claims, err := jwtService.ValidateToken(tokenString)
 			if err != nil {
-				switch err {
-				case jwt.ErrExpiredToken:
-					return echo.NewHTTPError(http.StatusUnauthorized, "JWT token has expired")
-				case jwt.ErrMalformedToken:
-					return echo.NewHTTPError(http.StatusUnauthorized, "Malformed JWT token")
-				case jwt.ErrInvalidSignature:
-					return echo.NewHTTPError(http.StatusUnauthorized, "Invalid JWT token signature")
-				default:
-					return echo.NewHTTPError(http.StatusUnauthorized, "Invalid JWT token")
-				}
+				return echo.NewHTTPError(http.StatusUnauthorized, "Authentication failed")
 			}
 
 			c.Set(UserIDKey, claims.UserID)
