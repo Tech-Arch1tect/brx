@@ -3,6 +3,9 @@ package app
 import (
 	"context"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/labstack/echo/v4"
 	gonertia "github.com/romsar/gonertia/v2"
@@ -247,7 +250,19 @@ func (a *App) Patch(path string, handler echo.HandlerFunc) {
 }
 
 func (a *App) Run() {
-	a.Start()
+	if err := a.fx.Start(context.Background()); err != nil {
+		log.Fatalf("Failed to start application: %v", err)
+	}
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	sig := <-sigChan
+	log.Printf("Received signal %v, shutting down gracefully...", sig)
+
+	if err := a.fx.Stop(context.Background()); err != nil {
+		log.Printf("Failed to stop application gracefully: %v", err)
+	}
 }
 
 func (a *App) DB() *gorm.DB {
