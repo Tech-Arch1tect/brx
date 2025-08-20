@@ -157,10 +157,11 @@ func (s *Service) ValidateToken(tokenString string) (*Claims, error) {
 			revoked, err := s.revocationService.IsTokenRevoked(tokenString)
 			if err != nil {
 				if s.logger != nil {
-					s.logger.Error("failed to check token revocation status", zap.Error(err))
+					s.logger.Error("revocation check failed - denying access for security", zap.Error(err))
 				}
-
-			} else if revoked {
+				return nil, errors.New("token validation failed")
+			}
+			if revoked {
 				if s.logger != nil {
 					s.logger.Warn("token validation failed - token has been revoked")
 				}
