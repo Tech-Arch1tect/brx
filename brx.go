@@ -45,6 +45,10 @@ func WithTOTP() options.Option {
 	return options.WithTOTP()
 }
 
+func WithJWT() options.Option {
+	return options.WithJWT()
+}
+
 func WithJWTRevocation() options.Option {
 	return options.WithJWTRevocation()
 }

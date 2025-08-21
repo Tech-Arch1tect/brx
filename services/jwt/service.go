@@ -55,10 +55,6 @@ func (s *Service) GetAccessExpirySeconds() int {
 	return int(s.config.JWT.AccessExpiry.Seconds())
 }
 
-func (s *Service) GetRefreshExpirySeconds() int {
-	return int(s.config.JWT.RefreshExpiry.Seconds())
-}
-
 func (s *Service) GenerateToken(userID uint) (string, error) {
 	now := time.Now()
 	jti := uuid.New().String()
@@ -83,35 +79,6 @@ func (s *Service) GenerateToken(userID uint) (string, error) {
 			s.logger.Error("failed to sign JWT token", zap.Error(err))
 		}
 		return "", fmt.Errorf("failed to generate JWT token: %w", err)
-	}
-
-	return tokenString, nil
-}
-
-func (s *Service) GenerateRefreshToken(userID uint) (string, error) {
-	now := time.Now()
-	jti := uuid.New().String()
-	claims := Claims{
-		UserID: userID,
-		JTI:    jti,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ID:        jti,
-			Issuer:    s.config.JWT.Issuer,
-			Subject:   fmt.Sprintf("%d", userID),
-			Audience:  []string{s.config.JWT.Issuer},
-			ExpiresAt: jwt.NewNumericDate(now.Add(s.config.JWT.RefreshExpiry)),
-			NotBefore: jwt.NewNumericDate(now),
-			IssuedAt:  jwt.NewNumericDate(now),
-		},
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString([]byte(s.config.JWT.SecretKey))
-	if err != nil {
-		if s.logger != nil {
-			s.logger.Error("failed to sign JWT refresh token", zap.Error(err))
-		}
-		return "", fmt.Errorf("failed to generate JWT refresh token: %w", err)
 	}
 
 	return tokenString, nil
@@ -205,25 +172,6 @@ func (s *Service) GenerateTOTPToken(userID uint) (string, error) {
 	}
 
 	return tokenString, nil
-}
-
-func (s *Service) RefreshToken(refreshTokenString string) (string, string, error) {
-	claims, err := s.ValidateToken(refreshTokenString)
-	if err != nil {
-		return "", "", err
-	}
-
-	newAccessToken, err := s.GenerateToken(claims.UserID)
-	if err != nil {
-		return "", "", err
-	}
-
-	newRefreshToken, err := s.GenerateRefreshToken(claims.UserID)
-	if err != nil {
-		return "", "", err
-	}
-
-	return newAccessToken, newRefreshToken, nil
 }
 
 func (s *Service) ExtractJTI(tokenString string) (string, error) {

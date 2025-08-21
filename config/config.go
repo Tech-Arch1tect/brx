@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"log"
+	"slices"
 	"strings"
 	"time"
 
@@ -11,20 +12,21 @@ import (
 )
 
 type Config struct {
-	App        AppConfig        `envPrefix:"BRX_APP_"`
-	Server     ServerConfig     `envPrefix:"BRX_SERVER_"`
-	Log        LogConfig        `envPrefix:"BRX_LOG_"`
-	Templates  TemplatesConfig  `envPrefix:"BRX_TEMPLATES_"`
-	Inertia    InertiaConfig    `envPrefix:"BRX_INERTIA_"`
-	Database   DatabaseConfig   `envPrefix:"BRX_DATABASE_"`
-	Session    SessionConfig    `envPrefix:"BRX_SESSION_"`
-	Auth       AuthConfig       `envPrefix:"BRX_AUTH_"`
-	JWT        JWTConfig        `envPrefix:"BRX_JWT_"`
-	TOTP       TOTPConfig       `envPrefix:"BRX_TOTP_"`
-	RateLimit  RateLimitConfig  `envPrefix:"BRX_RATELIMIT_"`
-	CSRF       CSRFConfig       `envPrefix:"BRX_CSRF_"`
-	Mail       MailConfig       `envPrefix:"BRX_MAIL_"`
-	Revocation RevocationConfig `envPrefix:"BRX_JWT_REVOCATION_"`
+	App          AppConfig          `envPrefix:"BRX_APP_"`
+	Server       ServerConfig       `envPrefix:"BRX_SERVER_"`
+	Log          LogConfig          `envPrefix:"BRX_LOG_"`
+	Templates    TemplatesConfig    `envPrefix:"BRX_TEMPLATES_"`
+	Inertia      InertiaConfig      `envPrefix:"BRX_INERTIA_"`
+	Database     DatabaseConfig     `envPrefix:"BRX_DATABASE_"`
+	Session      SessionConfig      `envPrefix:"BRX_SESSION_"`
+	Auth         AuthConfig         `envPrefix:"BRX_AUTH_"`
+	JWT          JWTConfig          `envPrefix:"BRX_JWT_"`
+	RefreshToken RefreshTokenConfig `envPrefix:"BRX_REFRESH_TOKEN_"`
+	TOTP         TOTPConfig         `envPrefix:"BRX_TOTP_"`
+	RateLimit    RateLimitConfig    `envPrefix:"BRX_RATELIMIT_"`
+	CSRF         CSRFConfig         `envPrefix:"BRX_CSRF_"`
+	Mail         MailConfig         `envPrefix:"BRX_MAIL_"`
+	Revocation   RevocationConfig   `envPrefix:"BRX_JWT_REVOCATION_"`
 }
 
 type AppConfig struct {
@@ -101,11 +103,17 @@ type AuthConfig struct {
 }
 
 type JWTConfig struct {
-	SecretKey     string        `env:"SECRET_KEY"`
-	AccessExpiry  time.Duration `env:"ACCESS_EXPIRY" envDefault:"15m"`
-	RefreshExpiry time.Duration `env:"REFRESH_EXPIRY" envDefault:"168h"`
-	Issuer        string        `env:"ISSUER" envDefault:"brx Application"`
-	Algorithm     string        `env:"ALGORITHM" envDefault:"HS256"`
+	SecretKey    string        `env:"SECRET_KEY"`
+	AccessExpiry time.Duration `env:"ACCESS_EXPIRY" envDefault:"15m"`
+	Issuer       string        `env:"ISSUER" envDefault:"brx Application"`
+	Algorithm    string        `env:"ALGORITHM" envDefault:"HS256"`
+}
+
+type RefreshTokenConfig struct {
+	TokenLength     int           `env:"TOKEN_LENGTH" envDefault:"32"`
+	Expiry          time.Duration `env:"EXPIRY" envDefault:"720h"`
+	RotationMode    string        `env:"ROTATION_MODE" envDefault:"always"`
+	CleanupInterval time.Duration `env:"CLEANUP_INTERVAL" envDefault:"1h"`
 }
 
 type TOTPConfig struct {
@@ -169,6 +177,9 @@ func LoadConfig(cfg any) error {
 		if err := validateJWTConfig(&config.JWT); err != nil {
 			return err
 		}
+		if err := validateRefreshTokenConfig(&config.RefreshToken); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -185,6 +196,24 @@ func validateJWTConfig(jwt *JWTConfig) error {
 		if strings.Contains(lowerSecret, pattern) {
 			return errors.New("JWT secret key contains weak patterns - please use a strong, random key")
 		}
+	}
+
+	return nil
+}
+
+func validateRefreshTokenConfig(rt *RefreshTokenConfig) error {
+	if rt.TokenLength < 16 {
+		return errors.New("refresh token length must be at least 16 bytes")
+	}
+
+	if rt.TokenLength > 128 {
+		return errors.New("refresh token length cannot exceed 128 bytes")
+	}
+
+	validModes := []string{"always", "conditional", "disabled"}
+	valid := slices.Contains(validModes, rt.RotationMode)
+	if !valid {
+		return errors.New("refresh token rotation mode must be: always, conditional, or disabled")
 	}
 
 	return nil

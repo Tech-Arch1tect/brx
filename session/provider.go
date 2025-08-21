@@ -86,6 +86,11 @@ type OptionalJWTService struct {
 	JWTService JWTRevocationService `optional:"true"`
 }
 
+type OptionalRefreshTokenService struct {
+	fx.In
+	RefreshTokenService RefreshTokenRevocationService `optional:"true"`
+}
+
 func WireJWTRevocationService(sessionSvc SessionService, optJWTSvc OptionalJWTService) {
 	if sessionSvc != nil && optJWTSvc.JWTService != nil {
 		if svc, ok := sessionSvc.(*sessionService); ok {
@@ -94,8 +99,17 @@ func WireJWTRevocationService(sessionSvc SessionService, optJWTSvc OptionalJWTSe
 	}
 }
 
+func WireRefreshTokenRevocationService(sessionSvc SessionService, optRefreshSvc OptionalRefreshTokenService) {
+	if sessionSvc != nil && optRefreshSvc.RefreshTokenService != nil {
+		if svc, ok := sessionSvc.(*sessionService); ok {
+			svc.SetRefreshTokenRevocationService(optRefreshSvc.RefreshTokenService)
+		}
+	}
+}
+
 var Module = fx.Module("session",
 	fx.Provide(ProvideSessionManager),
 	fx.Provide(ProvideSessionService),
 	fx.Invoke(WireJWTRevocationService),
+	fx.Invoke(WireRefreshTokenRevocationService),
 )

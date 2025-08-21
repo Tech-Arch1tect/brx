@@ -3,6 +3,7 @@ package session
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"time"
 
 	"github.com/mileusna/useragent"
@@ -13,22 +14,32 @@ type JWTRevocationService interface {
 	RevokeToken(jti string, expiresAt time.Time) error
 }
 
+type RefreshTokenRevocationService interface {
+	RevokeRefreshTokenByID(refreshTokenID uint) error
+}
+
 type sessionService struct {
-	db             *gorm.DB
-	sessionManager *Manager
-	jwtRevocation  JWTRevocationService
+	db                *gorm.DB
+	sessionManager    *Manager
+	jwtRevocation     JWTRevocationService
+	refreshRevocation RefreshTokenRevocationService
 }
 
 func NewSessionService(db *gorm.DB, sessionManager *Manager) SessionService {
 	return &sessionService{
-		db:             db,
-		sessionManager: sessionManager,
-		jwtRevocation:  nil,
+		db:                db,
+		sessionManager:    sessionManager,
+		jwtRevocation:     nil,
+		refreshRevocation: nil,
 	}
 }
 
 func (s *sessionService) SetJWTRevocationService(jwtRevocation JWTRevocationService) {
 	s.jwtRevocation = jwtRevocation
+}
+
+func (s *sessionService) SetRefreshTokenRevocationService(refreshRevocation RefreshTokenRevocationService) {
+	s.refreshRevocation = refreshRevocation
 }
 
 func (s *sessionService) TrackSession(userID uint, token string, sessionType SessionType, ipAddress, userAgent string, expiresAt time.Time) error {
@@ -46,47 +57,47 @@ func (s *sessionService) TrackSession(userID uint, token string, sessionType Ses
 	return s.db.Create(&session).Error
 }
 
-func (s *sessionService) TrackJWTSessionWithJTI(userID uint, accessJTI, refreshJTI string, ipAddress, userAgent string, expiresAt time.Time) error {
-	sessionToken := s.generateSessionToken(refreshJTI)
+func (s *sessionService) TrackJWTSessionWithRefreshToken(userID uint, accessJTI string, refreshTokenID uint, ipAddress, userAgent string, expiresAt time.Time) error {
+	sessionToken := s.generateSessionTokenFromID(refreshTokenID)
 	session := UserSession{
-		UserID:          userID,
-		Token:           sessionToken,
-		Type:            SessionTypeJWT,
-		AccessTokenJTI:  accessJTI,
-		RefreshTokenJTI: refreshJTI,
-		IPAddress:       ipAddress,
-		UserAgent:       userAgent,
-		CreatedAt:       time.Now(),
-		LastUsed:        time.Now(),
-		ExpiresAt:       expiresAt,
+		UserID:         userID,
+		Token:          sessionToken,
+		Type:           SessionTypeJWT,
+		AccessTokenJTI: accessJTI,
+		RefreshTokenID: refreshTokenID,
+		IPAddress:      ipAddress,
+		UserAgent:      userAgent,
+		CreatedAt:      time.Now(),
+		LastUsed:       time.Now(),
+		ExpiresAt:      expiresAt,
 	}
 	return s.db.Create(&session).Error
 }
 
-func (s *sessionService) GetJWTSessionByRefreshJTI(refreshJTI string) (*UserSession, error) {
+func (s *sessionService) GetJWTSessionByRefreshTokenID(refreshTokenID uint) (*UserSession, error) {
 	var session UserSession
-	err := s.db.Where("refresh_token_jti = ? AND type = ?", refreshJTI, SessionTypeJWT).First(&session).Error
+	err := s.db.Where("refresh_token_id = ? AND type = ?", refreshTokenID, SessionTypeJWT).First(&session).Error
 	if err != nil {
 		return nil, err
 	}
 	return &session, nil
 }
 
-func (s *sessionService) UpdateJWTSession(oldRefreshJTI, newAccessJTI, newRefreshJTI string, expiresAt time.Time) error {
-	newSessionToken := s.generateSessionToken(newRefreshJTI)
+func (s *sessionService) UpdateJWTSessionWithRefreshToken(oldRefreshTokenID uint, newAccessJTI string, newRefreshTokenID uint, expiresAt time.Time) error {
+	newSessionToken := s.generateSessionTokenFromID(newRefreshTokenID)
 	return s.db.Model(&UserSession{}).
-		Where("refresh_token_jti = ? AND type = ?", oldRefreshJTI, SessionTypeJWT).
+		Where("refresh_token_id = ? AND type = ?", oldRefreshTokenID, SessionTypeJWT).
 		Updates(map[string]any{
-			"token":             newSessionToken,
-			"access_token_jti":  newAccessJTI,
-			"refresh_token_jti": newRefreshJTI,
-			"expires_at":        expiresAt,
-			"last_used":         time.Now(),
+			"token":            newSessionToken,
+			"access_token_jti": newAccessJTI,
+			"refresh_token_id": newRefreshTokenID,
+			"expires_at":       expiresAt,
+			"last_used":        time.Now(),
 		}).Error
 }
 
-func (s *sessionService) generateSessionToken(token string) string {
-	hash := sha256.Sum256([]byte(token))
+func (s *sessionService) generateSessionTokenFromID(refreshTokenID uint) string {
+	hash := sha256.Sum256(fmt.Appendf(nil, "refresh_token_id_%d", refreshTokenID))
 	return hex.EncodeToString(hash[:])
 }
 
@@ -125,13 +136,13 @@ func (s *sessionService) RevokeSession(userID uint, sessionID uint) error {
 	}
 
 	if session.Type == SessionTypeJWT && s.jwtRevocation != nil {
-
 		if session.AccessTokenJTI != "" {
 			_ = s.jwtRevocation.RevokeToken(session.AccessTokenJTI, session.ExpiresAt)
 		}
-		if session.RefreshTokenJTI != "" {
-			_ = s.jwtRevocation.RevokeToken(session.RefreshTokenJTI, session.ExpiresAt)
-		}
+	}
+
+	if session.Type == SessionTypeJWT && s.refreshRevocation != nil && session.RefreshTokenID != 0 {
+		_ = s.refreshRevocation.RevokeRefreshTokenByID(session.RefreshTokenID)
 	}
 
 	if session.Type == SessionTypeWeb && s.sessionManager != nil && s.sessionManager.SessionManager.Store != nil {
@@ -161,9 +172,10 @@ func (s *sessionService) RevokeAllOtherSessions(userID uint, currentToken string
 			if session.AccessTokenJTI != "" {
 				_ = s.jwtRevocation.RevokeToken(session.AccessTokenJTI, session.ExpiresAt)
 			}
-			if session.RefreshTokenJTI != "" {
-				_ = s.jwtRevocation.RevokeToken(session.RefreshTokenJTI, session.ExpiresAt)
-			}
+		}
+
+		if session.Type == SessionTypeJWT && s.refreshRevocation != nil && session.RefreshTokenID != 0 {
+			_ = s.refreshRevocation.RevokeRefreshTokenByID(session.RefreshTokenID)
 		}
 
 		if session.Type == SessionTypeWeb && s.sessionManager != nil && s.sessionManager.SessionManager.Store != nil {

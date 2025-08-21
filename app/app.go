@@ -19,6 +19,7 @@ import (
 	"github.com/tech-arch1tect/brx/services/inertia"
 	"github.com/tech-arch1tect/brx/services/logging"
 	"github.com/tech-arch1tect/brx/services/mail"
+	"github.com/tech-arch1tect/brx/services/refreshtoken"
 	"github.com/tech-arch1tect/brx/services/revocation"
 	"github.com/tech-arch1tect/brx/services/templates"
 	"github.com/tech-arch1tect/brx/services/totp"
@@ -63,9 +64,18 @@ func New(opts ...options.Option) *App {
 
 	var db *gorm.DB
 	if appOpts.EnableDatabase {
-		modelsOpt := &database.ModelsOption{}
+		models := make([]any, 0)
 		if len(appOpts.DatabaseModels) > 0 {
-			modelsOpt = database.WithModels(appOpts.DatabaseModels...)
+			models = append(models, appOpts.DatabaseModels...)
+		}
+
+		if appOpts.EnableJWT {
+			models = append(models, &refreshtoken.RefreshToken{})
+		}
+
+		modelsOpt := &database.ModelsOption{}
+		if len(models) > 0 {
+			modelsOpt = database.WithModels(models...)
 		}
 
 		var err error
@@ -166,6 +176,10 @@ func New(opts ...options.Option) *App {
 
 	if appOpts.EnableTOTP {
 		fxOptions = append(fxOptions, totp.Module)
+	}
+
+	if appOpts.EnableJWT {
+		fxOptions = append(fxOptions, fx.Provide(refreshtoken.ProvideRefreshTokenService))
 	}
 
 	if appOpts.EnableJWTRevocation {

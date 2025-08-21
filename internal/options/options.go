@@ -16,6 +16,7 @@ type Options struct {
 	EnableAuth          bool
 	EnableMail          bool
 	EnableTOTP          bool
+	EnableJWT           bool
 	EnableJWTRevocation bool
 	ExtraFxOptions      []any
 }
@@ -71,6 +72,12 @@ func WithMail() Option {
 func WithTOTP() Option {
 	return func(opts *Options) {
 		opts.EnableTOTP = true
+	}
+}
+
+func WithJWT() Option {
+	return func(opts *Options) {
+		opts.EnableJWT = true
 	}
 }
 
