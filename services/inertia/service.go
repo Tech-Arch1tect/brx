@@ -127,6 +127,12 @@ func (s *Service) Render(c echo.Context, component string, props gonertia.Props)
 }
 
 func (s *Service) Redirect(c echo.Context, url string) error {
+	method := c.Request().Method
+	if method == "PUT" || method == "PATCH" || method == "DELETE" {
+		c.Response().Header().Set("Location", url)
+		c.Response().WriteHeader(303)
+		return nil
+	}
 	s.inertia.Redirect(c.Response(), c.Request(), url)
 	return nil
 }
@@ -137,6 +143,15 @@ func (s *Service) Location(c echo.Context, url string) error {
 }
 
 func (s *Service) Back(c echo.Context) error {
+	method := c.Request().Method
+	if method == "PUT" || method == "PATCH" || method == "DELETE" {
+		referer := c.Request().Header.Get("Referer")
+		if referer != "" {
+			c.Response().Header().Set("Location", referer)
+			c.Response().WriteHeader(303)
+			return nil
+		}
+	}
 	s.inertia.Back(c.Response(), c.Request())
 	return nil
 }
