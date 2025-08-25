@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -26,6 +27,23 @@ func Middleware(manager *Manager) echo.MiddlewareFunc {
 
 			c.Set(sessionManagerKey, manager)
 
+			if isWebSocketUpgrade(c.Request()) {
+				ctx := context.WithValue(c.Request().Context(), sessionManagerContextKey, manager)
+
+				token := ""
+				if cookie, err := c.Cookie(manager.SessionManager.Cookie.Name); err == nil {
+					token = cookie.Value
+				}
+				if token != "" {
+					if loadedCtx, err := manager.SessionManager.Load(ctx, token); err == nil {
+						ctx = loadedCtx
+					}
+				}
+
+				c.SetRequest(c.Request().WithContext(ctx))
+				return next(c)
+			}
+
 			var handlerErr error
 
 			rw := &responseWriterWrapper{
@@ -45,6 +63,11 @@ func Middleware(manager *Manager) echo.MiddlewareFunc {
 			return handlerErr
 		}
 	}
+}
+
+func isWebSocketUpgrade(r *http.Request) bool {
+	conn := strings.ToLower(r.Header.Get("Connection"))
+	return strings.Contains(conn, "upgrade") && strings.ToLower(r.Header.Get("Upgrade")) == "websocket"
 }
 
 // responseWriterWrapper wraps Echo's response writer to work with SCS
