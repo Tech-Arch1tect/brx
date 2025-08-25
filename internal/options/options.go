@@ -6,19 +6,21 @@ import (
 )
 
 type Options struct {
-	Config              *config.Config
-	EnableTemplates     bool
-	EnableInertia       bool
-	EnableDatabase      bool
-	DatabaseModels      []any
-	EnableSessions      bool
-	SessionOptions      *session.Options
-	EnableAuth          bool
-	EnableMail          bool
-	EnableTOTP          bool
-	EnableJWT           bool
-	EnableJWTRevocation bool
-	ExtraFxOptions      []any
+	Config                         *config.Config
+	EnableTemplates                bool
+	EnableInertia                  bool
+	EnableInertiaGlobalMiddleware  bool
+	EnableDatabase                 bool
+	DatabaseModels                 []any
+	EnableSessions                 bool
+	EnableSessionsGlobalMiddleware bool
+	SessionOptions                 *session.Options
+	EnableAuth                     bool
+	EnableMail                     bool
+	EnableTOTP                     bool
+	EnableJWT                      bool
+	EnableJWTRevocation            bool
+	ExtraFxOptions                 []any
 }
 
 type Option func(*Options)
@@ -38,6 +40,14 @@ func WithTemplates() Option {
 func WithInertia() Option {
 	return func(opts *Options) {
 		opts.EnableInertia = true
+		opts.EnableInertiaGlobalMiddleware = true
+	}
+}
+
+func WithInertiaNoGlobalMiddleware() Option {
+	return func(opts *Options) {
+		opts.EnableInertia = true
+		opts.EnableInertiaGlobalMiddleware = false
 	}
 }
 
@@ -51,6 +61,17 @@ func WithDatabase(models ...any) Option {
 func WithSessions(sessionOpts ...*session.Options) Option {
 	return func(opts *Options) {
 		opts.EnableSessions = true
+		opts.EnableSessionsGlobalMiddleware = true
+		if len(sessionOpts) > 0 {
+			opts.SessionOptions = sessionOpts[0]
+		}
+	}
+}
+
+func WithSessionsNoGlobalMiddleware(sessionOpts ...*session.Options) Option {
+	return func(opts *Options) {
+		opts.EnableSessions = true
+		opts.EnableSessionsGlobalMiddleware = false
 		if len(sessionOpts) > 0 {
 			opts.SessionOptions = sessionOpts[0]
 		}

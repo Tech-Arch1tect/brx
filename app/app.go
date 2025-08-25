@@ -134,7 +134,7 @@ func New(opts ...options.Option) *App {
 
 	if appOpts.EnableSessions {
 		fxOptions = append(fxOptions, fx.Invoke(func(srv *server.Server, sessionMgr *session.Manager) {
-			if sessionMgr != nil {
+			if sessionMgr != nil && appOpts.EnableSessionsGlobalMiddleware {
 				srv.Echo().Use(session.Middleware(sessionMgr))
 			}
 		}))
@@ -150,14 +150,16 @@ func New(opts ...options.Option) *App {
 		}
 
 		fxOptions = append(fxOptions, fx.Invoke(func(p SharedPropsParams) {
-			p.Server.Echo().Use(p.InertiaSvc.Middleware())
+			if appOpts.EnableInertiaGlobalMiddleware {
+				p.Server.Echo().Use(p.InertiaSvc.Middleware())
 
-			middlewareConfig := inertiashared.Config{
-				AuthEnabled:  true,
-				FlashEnabled: true,
-				UserProvider: p.UserProvider,
+				middlewareConfig := inertiashared.Config{
+					AuthEnabled:  true,
+					FlashEnabled: true,
+					UserProvider: p.UserProvider,
+				}
+				p.Server.Echo().Use(inertiashared.MiddlewareWithConfig(middlewareConfig))
 			}
-			p.Server.Echo().Use(inertiashared.MiddlewareWithConfig(middlewareConfig))
 		}))
 	}
 

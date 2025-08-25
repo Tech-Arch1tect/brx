@@ -25,12 +25,20 @@ func WithInertia() options.Option {
 	return options.WithInertia()
 }
 
+func WithInertiaNoGlobalMiddleware() options.Option {
+	return options.WithInertiaNoGlobalMiddleware()
+}
+
 func WithDatabase(models ...any) options.Option {
 	return options.WithDatabase(models...)
 }
 
 func WithSessions(sessionOpts ...*session.Options) options.Option {
 	return options.WithSessions(sessionOpts...)
+}
+
+func WithSessionsNoGlobalMiddleware(sessionOpts ...*session.Options) options.Option {
+	return options.WithSessionsNoGlobalMiddleware(sessionOpts...)
 }
 
 func WithAuth() options.Option {

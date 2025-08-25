@@ -9,6 +9,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	gonertia "github.com/romsar/gonertia/v2"
+	"github.com/tech-arch1tect/brx/middleware/inertiashared"
 )
 
 type Service struct {
@@ -135,6 +136,26 @@ func (s *Service) Redirect(c echo.Context, url string) error {
 	}
 	s.inertia.Redirect(c.Response(), c.Request(), url)
 	return nil
+}
+
+func (s *Service) ApplyMiddlewareToGroup(group *echo.Group, userProvider any) {
+	if s.inertia == nil {
+		return
+	}
+
+	group.Use(s.Middleware())
+
+	middlewareConfig := inertiashared.Config{
+		AuthEnabled:  true,
+		FlashEnabled: true,
+		UserProvider: nil,
+	}
+
+	if provider, ok := userProvider.(inertiashared.UserProvider); ok {
+		middlewareConfig.UserProvider = provider
+	}
+
+	group.Use(inertiashared.MiddlewareWithConfig(middlewareConfig))
 }
 
 func (s *Service) Location(c echo.Context, url string) error {
