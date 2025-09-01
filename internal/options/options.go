@@ -20,6 +20,9 @@ type Options struct {
 	EnableTOTP                     bool
 	EnableJWT                      bool
 	EnableJWTRevocation            bool
+	EnableSSL                      bool
+	SSLCertFile                    string
+	SSLKeyFile                     string
 	ExtraFxOptions                 []any
 }
 
@@ -111,5 +114,13 @@ func WithJWTRevocation() Option {
 func WithFxOptions(fxOpts ...any) Option {
 	return func(opts *Options) {
 		opts.ExtraFxOptions = append(opts.ExtraFxOptions, fxOpts...)
+	}
+}
+
+func WithSSL(certFile, keyFile string) Option {
+	return func(opts *Options) {
+		opts.EnableSSL = true
+		opts.SSLCertFile = certFile
+		opts.SSLKeyFile = keyFile
 	}
 }

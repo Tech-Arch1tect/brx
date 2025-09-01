@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 
+	"github.com/tech-arch1tect/brx/internal/options"
 	"github.com/tech-arch1tect/brx/services/logging"
 	"github.com/tech-arch1tect/brx/services/templates"
 	"go.uber.org/fx"
@@ -17,6 +18,7 @@ func NewProvider() fx.Option {
 			Server       *Server
 			Logger       *logging.Service
 			TemplatesSvc *templates.Service `optional:"true"`
+			Options      *options.Options
 		}) {
 			if params.TemplatesSvc != nil {
 				params.Server.SetRenderer(params.TemplatesSvc.Renderer())
@@ -27,7 +29,12 @@ func NewProvider() fx.Option {
 			params.Lifecycle.Append(fx.Hook{
 				OnStart: func(ctx context.Context) error {
 					params.Server.LogRoutes()
-					go params.Server.Start()
+
+					if params.Options.EnableSSL {
+						go params.Server.StartTLS(params.Options.SSLCertFile, params.Options.SSLKeyFile)
+					} else {
+						go params.Server.Start()
+					}
 					return nil
 				},
 				OnStop: func(ctx context.Context) error {

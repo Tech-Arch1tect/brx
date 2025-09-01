@@ -64,3 +64,7 @@ func WithJWTRevocation() options.Option {
 func WithFxOptions(fxOpts ...any) options.Option {
 	return options.WithFxOptions(fxOpts...)
 }
+
+func WithSSL(certFile, keyFile string) options.Option {
+	return options.WithSSL(certFile, keyFile)
+}

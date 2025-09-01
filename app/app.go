@@ -87,6 +87,7 @@ func New(opts ...options.Option) *App {
 
 	var fxOptions []fx.Option
 	fxOptions = append(fxOptions, fx.Supply(cfg))
+	fxOptions = append(fxOptions, fx.Supply(appOpts))
 	fxOptions = append(fxOptions, logging.Module)
 	fxOptions = append(fxOptions, server.NewProvider())
 

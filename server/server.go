@@ -86,6 +86,15 @@ func (s *Server) Start() {
 	}
 }
 
+func (s *Server) StartTLS(certFile, keyFile string) {
+	addr := fmt.Sprintf("%s:%s", s.cfg.Server.Host, s.cfg.Server.Port)
+	s.logger.Info("starting brx HTTPS server", zap.String("address", addr), zap.String("cert", certFile), zap.String("key", keyFile))
+
+	if err := s.echo.StartTLS(addr, certFile, keyFile); err != nil {
+		s.logger.Fatal("failed to start HTTPS server", zap.Error(err))
+	}
+}
+
 func (s *Server) Get(path string, handler echo.HandlerFunc, middleware ...echo.MiddlewareFunc) {
 	s.echo.GET(path, handler, middleware...)
 }
