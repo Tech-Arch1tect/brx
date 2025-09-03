@@ -78,8 +78,18 @@ func New(opts ...options.Option) *App {
 			modelsOpt = database.WithModels(models...)
 		}
 
-		var err error
-		db, err = database.ProvideDatabase(*cfg, modelsOpt, nil)
+		// Create a basic logger for database initialization
+		earlyLogger, err := logging.NewService(logging.Config{
+			Level:      logging.LogLevel(cfg.Log.Level),
+			Format:     cfg.Log.Format,
+			OutputPath: cfg.Log.Output,
+		})
+		if err != nil {
+			// Fallback to no logging if logger creation fails
+			earlyLogger = nil
+		}
+
+		db, err = database.ProvideDatabase(*cfg, modelsOpt, earlyLogger)
 		if err != nil {
 			panic(err)
 		}
