@@ -40,6 +40,13 @@ type Service struct {
 }
 
 func NewService(cfg *config.Config, logger *logging.Service) *Service {
+	if logger != nil {
+		logger.Info("initializing JWT service",
+			zap.String("algorithm", cfg.JWT.Algorithm),
+			zap.Duration("access_expiry", cfg.JWT.AccessExpiry),
+			zap.String("issuer", cfg.JWT.Issuer))
+	}
+
 	return &Service{
 		config:            cfg,
 		logger:            logger,
@@ -56,8 +63,14 @@ func (s *Service) GetAccessExpirySeconds() int {
 }
 
 func (s *Service) GenerateToken(userID uint) (string, error) {
+	if s.logger != nil {
+		s.logger.Debug("generating JWT access token", zap.Uint("user_id", userID))
+	}
+
 	now := time.Now()
 	jti := uuid.New().String()
+	expiresAt := now.Add(s.config.JWT.AccessExpiry)
+
 	claims := Claims{
 		UserID: userID,
 		JTI:    jti,
@@ -66,7 +79,7 @@ func (s *Service) GenerateToken(userID uint) (string, error) {
 			Issuer:    s.config.JWT.Issuer,
 			Subject:   fmt.Sprintf("%d", userID),
 			Audience:  []string{s.config.JWT.Issuer},
-			ExpiresAt: jwt.NewNumericDate(now.Add(s.config.JWT.AccessExpiry)),
+			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			NotBefore: jwt.NewNumericDate(now),
 			IssuedAt:  jwt.NewNumericDate(now),
 		},
@@ -76,25 +89,49 @@ func (s *Service) GenerateToken(userID uint) (string, error) {
 	tokenString, err := token.SignedString([]byte(s.config.JWT.SecretKey))
 	if err != nil {
 		if s.logger != nil {
-			s.logger.Error("failed to sign JWT token", zap.Error(err))
+			s.logger.Error("failed to sign JWT token",
+				zap.Error(err),
+				zap.Uint("user_id", userID))
 		}
 		return "", fmt.Errorf("failed to generate JWT token: %w", err)
+	}
+
+	if s.logger != nil {
+		s.logger.Info("JWT access token generated successfully",
+			zap.Uint("user_id", userID),
+			zap.String("jti", jti),
+			zap.Time("expires_at", expiresAt))
 	}
 
 	return tokenString, nil
 }
 
 func (s *Service) ValidateToken(tokenString string) (*Claims, error) {
+	if s.logger != nil {
+		s.logger.Debug("validating JWT token")
+	}
+
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (any, error) {
 		if token.Method.Alg() == "none" {
+			if s.logger != nil {
+				s.logger.Warn("JWT token validation failed: 'none' algorithm attempted")
+			}
 			return nil, errors.New("'none' algorithm is not allowed")
 		}
 
 		if token.Method.Alg() != "HS256" {
+			if s.logger != nil {
+				s.logger.Warn("JWT token validation failed: unexpected algorithm",
+					zap.String("algorithm", token.Method.Alg()))
+			}
 			return nil, fmt.Errorf("unexpected algorithm: expected HS256, got %s", token.Method.Alg())
 		}
 
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			if s.logger != nil {
+				s.logger.Warn("JWT token validation failed: invalid algorithm family",
+					zap.Any("algorithm", token.Header["alg"]))
+			}
 			return nil, fmt.Errorf("invalid algorithm family: %v", token.Header["alg"])
 		}
 
@@ -119,6 +156,11 @@ func (s *Service) ValidateToken(tokenString string) (*Claims, error) {
 	}
 
 	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
+		if s.logger != nil {
+			s.logger.Debug("JWT token parsed successfully",
+				zap.Uint("user_id", claims.UserID),
+				zap.String("jti", claims.JTI))
+		}
 
 		if s.revocationService != nil {
 			revoked, err := s.revocationService.IsTokenRevoked(claims.JTI)
@@ -132,21 +174,37 @@ func (s *Service) ValidateToken(tokenString string) (*Claims, error) {
 			if revoked {
 				if s.logger != nil {
 					s.logger.Warn("token validation failed - token JTI has been revoked",
-						zap.String("jti", claims.JTI))
+						zap.String("jti", claims.JTI),
+						zap.Uint("user_id", claims.UserID))
 				}
 				return nil, ErrTokenRevoked
 			}
 		}
 
+		if s.logger != nil {
+			s.logger.Debug("JWT token validation successful",
+				zap.Uint("user_id", claims.UserID),
+				zap.String("jti", claims.JTI))
+		}
+
 		return claims, nil
 	}
 
+	if s.logger != nil {
+		s.logger.Warn("JWT token validation failed: invalid token structure")
+	}
 	return nil, ErrInvalidToken
 }
 
 func (s *Service) GenerateTOTPToken(userID uint) (string, error) {
+	if s.logger != nil {
+		s.logger.Debug("generating JWT TOTP pending token", zap.Uint("user_id", userID))
+	}
+
 	now := time.Now()
 	jti := uuid.New().String()
+	expiresAt := now.Add(10 * time.Minute)
+
 	claims := Claims{
 		UserID:    userID,
 		TokenType: "totp_pending",
@@ -156,7 +214,7 @@ func (s *Service) GenerateTOTPToken(userID uint) (string, error) {
 			Issuer:    s.config.JWT.Issuer,
 			Subject:   fmt.Sprintf("%d", userID),
 			Audience:  []string{s.config.JWT.Issuer},
-			ExpiresAt: jwt.NewNumericDate(now.Add(10 * time.Minute)),
+			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			NotBefore: jwt.NewNumericDate(now),
 			IssuedAt:  jwt.NewNumericDate(now),
 		},
@@ -166,28 +224,53 @@ func (s *Service) GenerateTOTPToken(userID uint) (string, error) {
 	tokenString, err := token.SignedString([]byte(s.config.JWT.SecretKey))
 	if err != nil {
 		if s.logger != nil {
-			s.logger.Error("failed to sign JWT TOTP token", zap.Error(err))
+			s.logger.Error("failed to sign JWT TOTP token",
+				zap.Error(err),
+				zap.Uint("user_id", userID))
 		}
 		return "", fmt.Errorf("failed to generate JWT TOTP token: %w", err)
+	}
+
+	if s.logger != nil {
+		s.logger.Info("JWT TOTP pending token generated successfully",
+			zap.Uint("user_id", userID),
+			zap.String("jti", jti),
+			zap.Time("expires_at", expiresAt))
 	}
 
 	return tokenString, nil
 }
 
 func (s *Service) ExtractJTI(tokenString string) (string, error) {
+	if s.logger != nil {
+		s.logger.Debug("extracting JTI from token")
+	}
+
 	token, _, err := new(jwt.Parser).ParseUnverified(tokenString, &Claims{})
 	if err != nil {
+		if s.logger != nil {
+			s.logger.Warn("failed to parse token for JTI extraction", zap.Error(err))
+		}
 		return "", fmt.Errorf("failed to parse token: %w", err)
 	}
 
 	if claims, ok := token.Claims.(*Claims); ok && claims.JTI != "" {
+		if s.logger != nil {
+			s.logger.Debug("JTI extracted successfully", zap.String("jti", claims.JTI))
+		}
 		return claims.JTI, nil
 	}
 
 	if regClaims, ok := token.Claims.(*jwt.RegisteredClaims); ok && regClaims.ID != "" {
+		if s.logger != nil {
+			s.logger.Debug("JTI extracted from registered claims", zap.String("jti", regClaims.ID))
+		}
 		return regClaims.ID, nil
 	}
 
+	if s.logger != nil {
+		s.logger.Warn("token missing JTI claim")
+	}
 	return "", errors.New("token missing JTI claim")
 }
 
@@ -216,8 +299,31 @@ func (s *Service) RevokeToken(jti string, expiresAt time.Time) error {
 
 func (s *Service) IsTokenRevoked(jti string) (bool, error) {
 	if s.revocationService == nil {
+		if s.logger != nil {
+			s.logger.Debug("revocation check requested but no revocation service available")
+		}
 		return false, nil
 	}
 
-	return s.revocationService.IsTokenRevoked(jti)
+	if s.logger != nil {
+		s.logger.Debug("checking token revocation status", zap.String("jti", jti))
+	}
+
+	revoked, err := s.revocationService.IsTokenRevoked(jti)
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Error("failed to check token revocation status",
+				zap.String("jti", jti),
+				zap.Error(err))
+		}
+		return false, err
+	}
+
+	if s.logger != nil {
+		s.logger.Debug("token revocation check completed",
+			zap.String("jti", jti),
+			zap.Bool("revoked", revoked))
+	}
+
+	return revoked, nil
 }
