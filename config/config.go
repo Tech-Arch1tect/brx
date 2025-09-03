@@ -12,21 +12,21 @@ import (
 )
 
 type Config struct {
-	App          AppConfig          `envPrefix:"BRX_APP_"`
-	Server       ServerConfig       `envPrefix:"BRX_SERVER_"`
-	Log          LogConfig          `envPrefix:"BRX_LOG_"`
-	Templates    TemplatesConfig    `envPrefix:"BRX_TEMPLATES_"`
-	Inertia      InertiaConfig      `envPrefix:"BRX_INERTIA_"`
-	Database     DatabaseConfig     `envPrefix:"BRX_DATABASE_"`
-	Session      SessionConfig      `envPrefix:"BRX_SESSION_"`
-	Auth         AuthConfig         `envPrefix:"BRX_AUTH_"`
-	JWT          JWTConfig          `envPrefix:"BRX_JWT_"`
-	RefreshToken RefreshTokenConfig `envPrefix:"BRX_REFRESH_TOKEN_"`
-	TOTP         TOTPConfig         `envPrefix:"BRX_TOTP_"`
-	RateLimit    RateLimitConfig    `envPrefix:"BRX_RATELIMIT_"`
-	CSRF         CSRFConfig         `envPrefix:"BRX_CSRF_"`
-	Mail         MailConfig         `envPrefix:"BRX_MAIL_"`
-	Revocation   RevocationConfig   `envPrefix:"BRX_JWT_REVOCATION_"`
+	App          AppConfig          `envPrefix:"APP_"`
+	Server       ServerConfig       `envPrefix:"SERVER_"`
+	Log          LogConfig          `envPrefix:"LOG_"`
+	Templates    TemplatesConfig    `envPrefix:"TEMPLATES_"`
+	Inertia      InertiaConfig      `envPrefix:"INERTIA_"`
+	Database     DatabaseConfig     `envPrefix:"DATABASE_"`
+	Session      SessionConfig      `envPrefix:"SESSION_"`
+	Auth         AuthConfig         `envPrefix:"AUTH_"`
+	JWT          JWTConfig          `envPrefix:"JWT_"`
+	RefreshToken RefreshTokenConfig `envPrefix:"REFRESH_TOKEN_"`
+	TOTP         TOTPConfig         `envPrefix:"TOTP_"`
+	RateLimit    RateLimitConfig    `envPrefix:"RATELIMIT_"`
+	CSRF         CSRFConfig         `envPrefix:"CSRF_"`
+	Mail         MailConfig         `envPrefix:"MAIL_"`
+	Revocation   RevocationConfig   `envPrefix:"JWT_REVOCATION_"`
 }
 
 type AppConfig struct {
