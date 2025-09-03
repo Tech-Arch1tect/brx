@@ -19,23 +19,39 @@ type Server struct {
 }
 
 func New(cfg *config.Config, logger *logging.Service) *Server {
+	if logger != nil {
+		logger.Info("initializing brx server",
+			zap.String("host", cfg.Server.Host),
+			zap.String("port", cfg.Server.Port),
+			zap.Int("trusted_proxies_count", len(cfg.Server.TrustedProxies)),
+			zap.Bool("hide_banner", false))
+	}
+
 	e := echo.New()
 	e.HideBanner = false
 
 	configureTrustedProxies(e, cfg.Server.TrustedProxies, logger)
 
-	return &Server{
+	server := &Server{
 		echo:   e,
 		cfg:    cfg,
 		logger: logger,
 	}
+
+	if logger != nil {
+		logger.Info("brx server initialized successfully")
+	}
+
+	return server
 }
 
 func configureTrustedProxies(e *echo.Echo, trustedProxies []string, logger *logging.Service) {
 
 	if len(trustedProxies) == 0 {
 		e.IPExtractor = echo.ExtractIPDirect()
-		logger.Info("No trusted proxies configured - using direct IP extraction (secure)")
+		if logger != nil {
+			logger.Info("No trusted proxies configured - using direct IP extraction (secure)")
+		}
 		return
 	}
 
@@ -79,19 +95,41 @@ func configureTrustedProxies(e *echo.Echo, trustedProxies []string, logger *logg
 
 func (s *Server) Start() {
 	addr := fmt.Sprintf("%s:%s", s.cfg.Server.Host, s.cfg.Server.Port)
-	s.logger.Info("starting brx server", zap.String("address", addr))
+	if s.logger != nil {
+		s.logger.Info("starting HTTP server",
+			zap.String("address", addr),
+			zap.String("host", s.cfg.Server.Host),
+			zap.String("port", s.cfg.Server.Port))
+	}
 
 	if err := s.echo.Start(addr); err != nil {
-		s.logger.Fatal("failed to start server", zap.Error(err))
+		if s.logger != nil {
+			s.logger.Fatal("HTTP server failed to start",
+				zap.Error(err),
+				zap.String("address", addr))
+		}
 	}
 }
 
 func (s *Server) StartTLS(certFile, keyFile string) {
 	addr := fmt.Sprintf("%s:%s", s.cfg.Server.Host, s.cfg.Server.Port)
-	s.logger.Info("starting brx HTTPS server", zap.String("address", addr), zap.String("cert", certFile), zap.String("key", keyFile))
+	if s.logger != nil {
+		s.logger.Info("starting HTTPS server with TLS",
+			zap.String("address", addr),
+			zap.String("host", s.cfg.Server.Host),
+			zap.String("port", s.cfg.Server.Port),
+			zap.String("cert_file", certFile),
+			zap.String("key_file", keyFile))
+	}
 
 	if err := s.echo.StartTLS(addr, certFile, keyFile); err != nil {
-		s.logger.Fatal("failed to start HTTPS server", zap.Error(err))
+		if s.logger != nil {
+			s.logger.Fatal("HTTPS server failed to start",
+				zap.Error(err),
+				zap.String("address", addr),
+				zap.String("cert_file", certFile),
+				zap.String("key_file", keyFile))
+		}
 	}
 }
 
