@@ -54,7 +54,18 @@ func New(opts ...options.Option) *App {
 
 	var templateSvc *templates.Service
 	if appOpts.EnableTemplates {
-		templateSvc = templates.New(&cfg.Templates)
+		// Create early logger for template service initialization
+		earlyLogger, err := logging.NewService(logging.Config{
+			Level:      logging.LogLevel(cfg.Log.Level),
+			Format:     cfg.Log.Format,
+			OutputPath: cfg.Log.Output,
+		})
+		if err != nil {
+			// Fallback to no logging if logger creation fails
+			earlyLogger = nil
+		}
+
+		templateSvc = templates.New(&cfg.Templates, earlyLogger)
 	}
 
 	var inertiaSvc *inertia.Service
