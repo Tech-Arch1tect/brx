@@ -70,7 +70,18 @@ func New(opts ...options.Option) *App {
 
 	var inertiaSvc *inertia.Service
 	if appOpts.EnableInertia {
-		inertiaSvc = inertia.New(&cfg.Inertia)
+		// Create early logger for Inertia service initialization
+		earlyLogger, err := logging.NewService(logging.Config{
+			Level:      logging.LogLevel(cfg.Log.Level),
+			Format:     cfg.Log.Format,
+			OutputPath: cfg.Log.Output,
+		})
+		if err != nil {
+			// Fallback to no logging if logger creation fails
+			earlyLogger = nil
+		}
+
+		inertiaSvc = inertia.New(&cfg.Inertia, earlyLogger)
 	}
 
 	var db *gorm.DB
