@@ -23,6 +23,13 @@ type Service struct {
 }
 
 func NewService(cfg *config.Config, store Store, logger *logging.Service) *Service {
+	if logger != nil {
+		logger.Info("initializing JWT revocation service",
+			zap.Bool("enabled", cfg.Revocation.Enabled),
+			zap.String("store_type", cfg.Revocation.Store),
+			zap.Duration("cleanup_period", cfg.Revocation.CleanupPeriod))
+	}
+
 	return &Service{
 		config: cfg,
 		store:  store,
@@ -31,7 +38,17 @@ func NewService(cfg *config.Config, store Store, logger *logging.Service) *Servi
 }
 
 func (s *Service) RevokeToken(jti string, expiresAt time.Time) error {
+	if s.logger != nil {
+		s.logger.Info("revoking JWT token",
+			zap.String("jti", jti),
+			zap.Time("expires_at", expiresAt))
+	}
+
 	if s.store == nil {
+		if s.logger != nil {
+			s.logger.Error("token revocation failed - store not configured",
+				zap.String("jti", jti))
+		}
 		return ErrStoreNotConfigured
 	}
 
@@ -53,7 +70,16 @@ func (s *Service) RevokeToken(jti string, expiresAt time.Time) error {
 }
 
 func (s *Service) IsTokenRevoked(jti string) (bool, error) {
+	if s.logger != nil {
+		s.logger.Debug("checking JWT token revocation status",
+			zap.String("jti", jti))
+	}
+
 	if s.store == nil {
+		if s.logger != nil {
+			s.logger.Error("revocation check failed - store not configured",
+				zap.String("jti", jti))
+		}
 		return false, ErrStoreNotConfigured
 	}
 
@@ -65,11 +91,27 @@ func (s *Service) IsTokenRevoked(jti string) (bool, error) {
 		return false, fmt.Errorf("failed to check JTI revocation status: %w", err)
 	}
 
+	if s.logger != nil {
+		s.logger.Debug("JWT token revocation check completed",
+			zap.String("jti", jti),
+			zap.Bool("revoked", revoked))
+	}
+
 	return revoked, nil
 }
 
 func (s *Service) RevokeAllUserTokens(userID uint, issuedBefore time.Time) error {
+	if s.logger != nil {
+		s.logger.Info("revoking all user JWT tokens",
+			zap.Uint("user_id", userID),
+			zap.Time("issued_before", issuedBefore))
+	}
+
 	if s.store == nil {
+		if s.logger != nil {
+			s.logger.Error("user token revocation failed - store not configured",
+				zap.Uint("user_id", userID))
+		}
 		return ErrStoreNotConfigured
 	}
 
@@ -93,7 +135,14 @@ func (s *Service) RevokeAllUserTokens(userID uint, issuedBefore time.Time) error
 }
 
 func (s *Service) CleanupExpiredTokens() error {
+	if s.logger != nil {
+		s.logger.Debug("starting cleanup of expired revoked tokens")
+	}
+
 	if s.store == nil {
+		if s.logger != nil {
+			s.logger.Error("token cleanup failed - store not configured")
+		}
 		return ErrStoreNotConfigured
 	}
 
