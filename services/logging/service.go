@@ -42,7 +42,7 @@ func NewService(config Config) (*Service, error) {
 		zapConfig.OutputPaths = []string{config.OutputPath}
 	}
 
-	logger, err := zapConfig.Build()
+	logger, err := zapConfig.Build(zap.AddCaller(), zap.AddCallerSkip(1))
 	if err != nil {
 		return nil, err
 	}
