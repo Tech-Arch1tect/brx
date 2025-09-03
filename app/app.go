@@ -79,7 +79,7 @@ func New(opts ...options.Option) *App {
 		}
 
 		var err error
-		db, err = database.ProvideDatabase(*cfg, modelsOpt)
+		db, err = database.ProvideDatabase(*cfg, modelsOpt, nil)
 		if err != nil {
 			panic(err)
 		}
