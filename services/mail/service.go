@@ -42,7 +42,10 @@ func NewService(cfg *config.MailConfig, logger *logging.Service) (*Service, erro
 
 	clientOpts := []mail.Option{
 		mail.WithPort(cfg.Port),
-		mail.WithSMTPAuth(mail.SMTPAuthPlain),
+	}
+
+	if cfg.Username != "" {
+		clientOpts = append(clientOpts, mail.WithSMTPAuth(mail.SMTPAuthPlain))
 	}
 
 	switch cfg.Encryption {
