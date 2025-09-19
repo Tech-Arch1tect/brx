@@ -124,7 +124,7 @@ func (s *Server) StartTLS(certFile, keyFile string) {
 
 	if err := s.echo.StartTLS(addr, certFile, keyFile); err != nil {
 		if s.logger != nil {
-			s.logger.Fatal("HTTPS server failed to start",
+			s.logger.Error("HTTPS server failed to start",
 				zap.Error(err),
 				zap.String("address", addr),
 				zap.String("cert_file", certFile),

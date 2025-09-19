@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	gonertia "github.com/romsar/gonertia/v2"
@@ -258,9 +259,22 @@ func (a *App) Start() {
 	<-a.fx.Done()
 }
 
+func (a *App) StartTest() error {
+	return a.fx.Start(context.Background())
+}
+
 func (a *App) Stop() {
 	if err := a.fx.Stop(context.Background()); err != nil {
 		log.Printf("Failed to stop application gracefully: %v", err)
+	}
+}
+
+func (a *App) StopTest() {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	if err := a.fx.Stop(ctx); err != nil {
+		log.Printf("Failed to stop test application: %v", err)
 	}
 }
 
