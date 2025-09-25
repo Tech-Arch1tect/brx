@@ -3,12 +3,17 @@ package server
 import (
 	"context"
 
-	"github.com/tech-arch1tect/brx/internal/options"
 	"github.com/tech-arch1tect/brx/services/logging"
 	"github.com/tech-arch1tect/brx/services/templates"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 )
+
+type SSLConfig struct {
+	Enabled  bool
+	CertFile string
+	KeyFile  string
+}
 
 func NewProvider() fx.Option {
 	return fx.Options(
@@ -19,7 +24,7 @@ func NewProvider() fx.Option {
 			Server       *Server
 			Logger       *logging.Service
 			TemplatesSvc *templates.Service `optional:"true"`
-			Options      *options.Options
+			SSLConfig    *SSLConfig         `optional:"true"`
 		}) {
 			if params.Logger != nil {
 				params.Logger.Debug("configuring server middleware and lifecycle hooks")
@@ -47,13 +52,13 @@ func NewProvider() fx.Option {
 
 					params.Server.LogRoutes()
 
-					if params.Options.EnableSSL {
+					if params.SSLConfig != nil && params.SSLConfig.Enabled {
 						if params.Logger != nil {
 							params.Logger.Info("SSL enabled - starting HTTPS server in background",
-								zap.String("cert_file", params.Options.SSLCertFile),
-								zap.String("key_file", params.Options.SSLKeyFile))
+								zap.String("cert_file", params.SSLConfig.CertFile),
+								zap.String("key_file", params.SSLConfig.KeyFile))
 						}
-						go params.Server.StartTLS(params.Options.SSLCertFile, params.Options.SSLKeyFile)
+						go params.Server.StartTLS(params.SSLConfig.CertFile, params.SSLConfig.KeyFile)
 					} else {
 						if params.Logger != nil {
 							params.Logger.Info("SSL disabled - starting HTTP server in background")
