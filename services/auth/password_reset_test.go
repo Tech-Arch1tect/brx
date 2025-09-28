@@ -573,3 +573,59 @@ func TestService_CompletePasswordReset(t *testing.T) {
 		assert.Equal(t, ErrPasswordResetTokenInvalid, err)
 	})
 }
+
+func TestService_CleanupExpiredTokens(t *testing.T) {
+	db := testutils.SetupTestDB(t, &PasswordResetToken{})
+	defer testutils.CleanupTestDB(t, db)
+
+	cfg := testutils.GetTestConfig()
+	cfg.Auth.PasswordResetEnabled = true
+	service := NewService(cfg, db, nil)
+
+	testEmail := "test@example.com"
+
+	t.Run("removes expired password reset tokens", func(t *testing.T) {
+
+		validToken, err := service.CreatePasswordResetToken(testEmail)
+		require.NoError(t, err)
+
+		expiredToken := &PasswordResetToken{
+			Email:     "expired@example.com",
+			Token:     "expired-token",
+			ExpiresAt: time.Now().Add(-time.Hour),
+			Used:      false,
+		}
+		db.Create(expiredToken)
+
+		err = service.CleanupExpiredTokens()
+		require.NoError(t, err)
+
+		var expiredCount int64
+		db.Model(&PasswordResetToken{}).Where("token = ?", expiredToken.Token).Count(&expiredCount)
+		assert.Equal(t, int64(0), expiredCount)
+
+		var validCount int64
+		db.Model(&PasswordResetToken{}).Where("token = ?", validToken.Token).Count(&validCount)
+		assert.Equal(t, int64(1), validCount)
+	})
+
+	t.Run("fails when password reset disabled", func(t *testing.T) {
+		cfgDisabled := testutils.GetTestConfig()
+		cfgDisabled.Auth.PasswordResetEnabled = false
+		serviceDisabled := NewService(cfgDisabled, db, nil)
+
+		err := serviceDisabled.CleanupExpiredTokens()
+
+		require.Error(t, err)
+		testutils.AssertErrorType(t, ErrPasswordResetDisabled, err)
+	})
+
+	t.Run("fails when database is nil", func(t *testing.T) {
+		serviceNoDB := NewService(cfg, nil, nil)
+
+		err := serviceNoDB.CleanupExpiredTokens()
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "database is required")
+	})
+}

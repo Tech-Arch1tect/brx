@@ -462,3 +462,129 @@ func TestService_IsEmailVerificationRequired(t *testing.T) {
 		assert.False(t, required)
 	})
 }
+
+func TestService_IsEmailVerified(t *testing.T) {
+	db := testutils.SetupTestDB(t, &TestUserWithEmailVerification{})
+	defer testutils.CleanupTestDB(t, db)
+
+	testEmail := "test@example.com"
+	verifiedEmail := "verified@example.com"
+
+	unverifiedUser := &TestUserWithEmailVerification{
+		Email:           testEmail,
+		Password:        "hashedPassword",
+		EmailVerifiedAt: nil,
+	}
+	err := db.Create(unverifiedUser).Error
+	require.NoError(t, err)
+
+	now := time.Now()
+	verifiedUser := &TestUserWithEmailVerification{
+		Email:           verifiedEmail,
+		Password:        "hashedPassword",
+		EmailVerifiedAt: &now,
+	}
+	err = db.Create(verifiedUser).Error
+	require.NoError(t, err)
+
+	t.Run("returns true when email verification disabled", func(t *testing.T) {
+		cfgDisabled := testutils.GetTestConfig()
+		cfgDisabled.Auth.EmailVerificationEnabled = false
+		serviceDisabled := NewService(cfgDisabled, db, nil)
+
+		verified := serviceDisabled.IsEmailVerified(testEmail)
+		assert.True(t, verified)
+	})
+
+	t.Run("returns false for unverified email when verification enabled", func(t *testing.T) {
+		cfgEnabled := testutils.GetTestConfig()
+		cfgEnabled.Auth.EmailVerificationEnabled = true
+		serviceEnabled := NewService(cfgEnabled, db, nil)
+
+		verified := serviceEnabled.IsEmailVerified(testEmail)
+		assert.False(t, verified)
+	})
+
+	t.Run("returns true for verified email when verification enabled", func(t *testing.T) {
+		cfgEnabled := testutils.GetTestConfig()
+		cfgEnabled.Auth.EmailVerificationEnabled = true
+		serviceEnabled := NewService(cfgEnabled, db, nil)
+
+		verified := serviceEnabled.IsEmailVerified(verifiedEmail)
+		assert.True(t, verified)
+	})
+
+	t.Run("returns false for non-existent email", func(t *testing.T) {
+		cfgEnabled := testutils.GetTestConfig()
+		cfgEnabled.Auth.EmailVerificationEnabled = true
+		serviceEnabled := NewService(cfgEnabled, db, nil)
+
+		verified := serviceEnabled.IsEmailVerified("nonexistent@example.com")
+		assert.False(t, verified)
+	})
+
+	t.Run("returns false when database is nil", func(t *testing.T) {
+		cfgEnabled := testutils.GetTestConfig()
+		cfgEnabled.Auth.EmailVerificationEnabled = true
+		serviceNoDB := NewService(cfgEnabled, nil, nil)
+
+		verified := serviceNoDB.IsEmailVerified(testEmail)
+		assert.False(t, verified)
+	})
+}
+
+func TestService_CleanupExpiredEmailVerificationTokens(t *testing.T) {
+	db := testutils.SetupTestDB(t, &EmailVerificationToken{})
+	defer testutils.CleanupTestDB(t, db)
+
+	cfg := testutils.GetTestConfig()
+	cfg.Auth.EmailVerificationEnabled = true
+	service := NewService(cfg, db, nil)
+
+	testEmail := "test@example.com"
+
+	t.Run("removes expired email verification tokens", func(t *testing.T) {
+
+		validToken, err := service.CreateEmailVerificationToken(testEmail)
+		require.NoError(t, err)
+
+		expiredToken := &EmailVerificationToken{
+			Email:     "expired@example.com",
+			Token:     "expired-token",
+			ExpiresAt: time.Now().Add(-time.Hour),
+			Used:      false,
+		}
+		db.Create(expiredToken)
+
+		err = service.CleanupExpiredEmailVerificationTokens()
+		require.NoError(t, err)
+
+		var expiredCount int64
+		db.Model(&EmailVerificationToken{}).Where("token = ?", expiredToken.Token).Count(&expiredCount)
+		assert.Equal(t, int64(0), expiredCount)
+
+		var validCount int64
+		db.Model(&EmailVerificationToken{}).Where("token = ?", validToken.Token).Count(&validCount)
+		assert.Equal(t, int64(1), validCount)
+	})
+
+	t.Run("fails when email verification disabled", func(t *testing.T) {
+		cfgDisabled := testutils.GetTestConfig()
+		cfgDisabled.Auth.EmailVerificationEnabled = false
+		serviceDisabled := NewService(cfgDisabled, db, nil)
+
+		err := serviceDisabled.CleanupExpiredEmailVerificationTokens()
+
+		require.Error(t, err)
+		testutils.AssertErrorType(t, ErrEmailVerificationDisabled, err)
+	})
+
+	t.Run("fails when database is nil", func(t *testing.T) {
+		serviceNoDB := NewService(cfg, nil, nil)
+
+		err := serviceNoDB.CleanupExpiredEmailVerificationTokens()
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "database is required")
+	})
+}
