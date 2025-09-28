@@ -6,8 +6,9 @@ import (
 )
 
 type Service struct {
-	logger *zap.Logger
-	sugar  *zap.SugaredLogger
+	logger     *zap.Logger
+	sugar      *zap.SugaredLogger
+	outputPath string
 }
 
 type LogLevel string
@@ -40,6 +41,10 @@ func NewService(config Config) (*Service, error) {
 
 	if config.OutputPath != "stdout" {
 		zapConfig.OutputPaths = []string{config.OutputPath}
+		zapConfig.ErrorOutputPaths = []string{config.OutputPath}
+	} else {
+		zapConfig.OutputPaths = []string{"stdout"}
+		zapConfig.ErrorOutputPaths = []string{"stdout"}
 	}
 
 	logger, err := zapConfig.Build(zap.AddCaller(), zap.AddCallerSkip(1))
@@ -48,8 +53,9 @@ func NewService(config Config) (*Service, error) {
 	}
 
 	return &Service{
-		logger: logger,
-		sugar:  logger.Sugar(),
+		logger:     logger,
+		sugar:      logger.Sugar(),
+		outputPath: config.OutputPath,
 	}, nil
 }
 
@@ -159,6 +165,9 @@ func (s *Service) Fatalw(msg string, keysAndValues ...any) {
 
 func (s *Service) Sync() error {
 	if s != nil && s.logger != nil {
+		if s.outputPath == "stdout" || s.outputPath == "stderr" {
+			return nil
+		}
 		return s.logger.Sync()
 	}
 	return nil
