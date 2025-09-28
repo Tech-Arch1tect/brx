@@ -165,9 +165,8 @@ func TestService_InitializeFromFS(t *testing.T) {
 
 		err := service.InitializeFromFS(testFS, "testdata/app.html")
 
-		if err != nil {
-			assert.Error(t, err)
-		}
+		assert.NoError(t, err)
+		assert.NotNil(t, service.inertia)
 	})
 
 	t.Run("with SSR configuration", func(t *testing.T) {
@@ -180,9 +179,8 @@ func TestService_InitializeFromFS(t *testing.T) {
 
 		err := service.InitializeFromFS(testFS, "testdata/app.html")
 
-		if err != nil {
-			assert.Error(t, err)
-		}
+		assert.NoError(t, err)
+		assert.NotNil(t, service.inertia)
 	})
 }
 
