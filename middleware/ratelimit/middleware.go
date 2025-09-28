@@ -40,6 +40,10 @@ func Middleware(cfg *Config) echo.MiddlewareFunc {
 		cfg.OnLimitReached = DefaultOnLimitReached
 	}
 
+	if cfg.CountMode == "" {
+		cfg.CountMode = config.CountAll
+	}
+
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			key := cfg.KeyGenerator(c)
