@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	htmlTemplate "html/template"
+	"os"
 	"path/filepath"
 	textTemplate "text/template"
 	"time"
@@ -14,9 +15,21 @@ import (
 	"go.uber.org/zap"
 )
 
+type MailClient interface {
+	DialAndSend(msg *mail.Msg) error
+}
+
+type GoMailClient struct {
+	client *mail.Client
+}
+
+func (c *GoMailClient) DialAndSend(msg *mail.Msg) error {
+	return c.client.DialAndSend(msg)
+}
+
 type Service struct {
 	config        *config.MailConfig
-	client        *mail.Client
+	client        MailClient
 	htmlTemplates *htmlTemplate.Template
 	textTemplates *textTemplate.Template
 	logger        *logging.Service
@@ -25,6 +38,10 @@ type Service struct {
 type TemplateData map[string]any
 
 func NewService(cfg *config.MailConfig, logger *logging.Service) (*Service, error) {
+	return NewServiceWithClient(cfg, logger, nil)
+}
+
+func NewServiceWithClient(cfg *config.MailConfig, logger *logging.Service, client MailClient) (*Service, error) {
 	if logger != nil {
 		logger.Info("initializing mail service",
 			zap.String("host", cfg.Host),
@@ -40,51 +57,57 @@ func NewService(cfg *config.MailConfig, logger *logging.Service) (*Service, erro
 		return nil, fmt.Errorf("MAIL_FROM_ADDRESS is required")
 	}
 
-	clientOpts := []mail.Option{
-		mail.WithPort(cfg.Port),
-	}
-
-	if cfg.Username != "" {
-		clientOpts = append(clientOpts, mail.WithSMTPAuth(mail.SMTPAuthPlain))
-	}
-
-	switch cfg.Encryption {
-	case "tls", "starttls":
-		clientOpts = append(clientOpts, mail.WithTLSPortPolicy(mail.TLSMandatory))
-	case "ssl":
-		clientOpts = append(clientOpts, mail.WithSSL())
-	case "none":
-		clientOpts = append(clientOpts, mail.WithTLSPortPolicy(mail.NoTLS))
-	default:
-
-		clientOpts = append(clientOpts, mail.WithTLSPortPolicy(mail.TLSMandatory))
-	}
-
-	if cfg.Username != "" {
-		clientOpts = append(clientOpts, mail.WithUsername(cfg.Username))
-	}
-	if cfg.Password != "" {
-		clientOpts = append(clientOpts, mail.WithPassword(cfg.Password))
-	}
-
-	if logger != nil {
-		logger.Debug("creating SMTP client", zap.String("host", cfg.Host))
-	}
-
-	client, err := mail.NewClient(cfg.Host, clientOpts...)
-	if err != nil {
-		if logger != nil {
-			logger.Error("failed to create mail client",
-				zap.Error(err),
-				zap.String("host", cfg.Host),
-				zap.Int("port", cfg.Port))
+	var mailClient MailClient
+	if client != nil {
+		mailClient = client
+	} else {
+		clientOpts := []mail.Option{
+			mail.WithPort(cfg.Port),
 		}
-		return nil, fmt.Errorf("failed to create mail client: %w", err)
+
+		if cfg.Username != "" {
+			clientOpts = append(clientOpts, mail.WithSMTPAuth(mail.SMTPAuthPlain))
+		}
+
+		switch cfg.Encryption {
+		case "tls", "starttls":
+			clientOpts = append(clientOpts, mail.WithTLSPortPolicy(mail.TLSMandatory))
+		case "ssl":
+			clientOpts = append(clientOpts, mail.WithSSL())
+		case "none":
+			clientOpts = append(clientOpts, mail.WithTLSPortPolicy(mail.NoTLS))
+		default:
+			clientOpts = append(clientOpts, mail.WithTLSPortPolicy(mail.TLSMandatory))
+		}
+
+		if cfg.Username != "" {
+			clientOpts = append(clientOpts, mail.WithUsername(cfg.Username))
+		}
+		if cfg.Password != "" {
+			clientOpts = append(clientOpts, mail.WithPassword(cfg.Password))
+		}
+
+		if logger != nil {
+			logger.Debug("creating SMTP client", zap.String("host", cfg.Host))
+		}
+
+		goMailClient, err := mail.NewClient(cfg.Host, clientOpts...)
+		if err != nil {
+			if logger != nil {
+				logger.Error("failed to create mail client",
+					zap.Error(err),
+					zap.String("host", cfg.Host),
+					zap.Int("port", cfg.Port))
+			}
+			return nil, fmt.Errorf("failed to create mail client: %w", err)
+		}
+
+		mailClient = &GoMailClient{client: goMailClient}
 	}
 
 	service := &Service{
 		config: cfg,
-		client: client,
+		client: mailClient,
 		logger: logger,
 	}
 
@@ -109,6 +132,14 @@ func (s *Service) loadTemplates() error {
 		return nil
 	}
 
+	if _, err := os.Stat(s.config.TemplatesDir); os.IsNotExist(err) {
+		if s.logger != nil {
+			s.logger.Debug("templates directory does not exist, skipping template loading",
+				zap.String("templates_dir", s.config.TemplatesDir))
+		}
+		return nil
+	}
+
 	if s.logger != nil {
 		s.logger.Info("loading mail templates", zap.String("templates_dir", s.config.TemplatesDir))
 	}
@@ -116,25 +147,36 @@ func (s *Service) loadTemplates() error {
 	htmlPattern := filepath.Join(s.config.TemplatesDir, "*.html")
 	textPattern := filepath.Join(s.config.TemplatesDir, "*.txt")
 
-	var err error
-	s.htmlTemplates, err = htmlTemplate.ParseGlob(htmlPattern)
-	if err != nil && err.Error() != "template: pattern matches no files: "+htmlPattern {
-		if s.logger != nil {
-			s.logger.Error("failed to parse HTML templates",
-				zap.Error(err),
-				zap.String("pattern", htmlPattern))
+	htmlFiles, err := filepath.Glob(htmlPattern)
+	if err != nil {
+		return fmt.Errorf("failed to glob HTML templates: %w", err)
+	}
+	if len(htmlFiles) > 0 {
+		s.htmlTemplates, err = htmlTemplate.ParseGlob(htmlPattern)
+		if err != nil {
+			if s.logger != nil {
+				s.logger.Error("failed to parse HTML templates",
+					zap.Error(err),
+					zap.String("pattern", htmlPattern))
+			}
+			return fmt.Errorf("failed to parse HTML templates: %w", err)
 		}
-		return fmt.Errorf("failed to parse HTML templates: %w", err)
 	}
 
-	s.textTemplates, err = textTemplate.ParseGlob(textPattern)
-	if err != nil && err.Error() != "template: pattern matches no files: "+textPattern {
-		if s.logger != nil {
-			s.logger.Error("failed to parse text templates",
-				zap.Error(err),
-				zap.String("pattern", textPattern))
+	textFiles, err := filepath.Glob(textPattern)
+	if err != nil {
+		return fmt.Errorf("failed to glob text templates: %w", err)
+	}
+	if len(textFiles) > 0 {
+		s.textTemplates, err = textTemplate.ParseGlob(textPattern)
+		if err != nil {
+			if s.logger != nil {
+				s.logger.Error("failed to parse text templates",
+					zap.Error(err),
+					zap.String("pattern", textPattern))
+			}
+			return fmt.Errorf("failed to parse text templates: %w", err)
 		}
-		return fmt.Errorf("failed to parse text templates: %w", err)
 	}
 
 	var htmlCount, textCount int
