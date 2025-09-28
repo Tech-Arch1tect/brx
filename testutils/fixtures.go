@@ -27,9 +27,11 @@ func GetTestConfig() *config.Config {
 			EmailVerificationTokenLength: 32,
 			EmailVerificationExpiry:      24 * time.Hour,
 			RememberMeEnabled:            true,
+			RememberMeTokenLength:        32,
 			RememberMeExpiry:             30 * 24 * time.Hour,
 			RememberMeCookieSecure:       false,
 			RememberMeCookieSameSite:     "lax",
+			RememberMeRotateOnUse:        true,
 		},
 		JWT: config.JWTConfig{
 			SecretKey:    "test-secret-key-32-chars-long!!",
