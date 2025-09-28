@@ -233,6 +233,16 @@ func (s *Service) CreatePasswordResetToken(email string) (*PasswordResetToken, e
 		return nil, fmt.Errorf("database is required for password reset functionality")
 	}
 
+	now := time.Now()
+	if err := s.db.Model(&PasswordResetToken{}).
+		Where("email = ? AND used = ? AND expires_at > ?", email, false, now).
+		Update("used", true).Error; err != nil {
+		if s.logger != nil {
+			s.logger.Error("failed to invalidate existing password reset tokens", zap.Error(err), zap.String("email", email))
+		}
+		return nil, fmt.Errorf("failed to invalidate existing tokens: %w", err)
+	}
+
 	token, err := s.generateSecureToken()
 	if err != nil {
 		if s.logger != nil {
@@ -241,7 +251,6 @@ func (s *Service) CreatePasswordResetToken(email string) (*PasswordResetToken, e
 		return nil, err
 	}
 
-	now := time.Now()
 	resetToken := &PasswordResetToken{
 		Email:     email,
 		Token:     token,
@@ -384,11 +393,34 @@ func (s *Service) ResetPassword(token, newPassword string) error {
 		return err
 	}
 
-	if err := s.db.Table("users").Where("email = ?", resetToken.Email).Update("password", hashedPassword).Error; err != nil {
+	var userCount int64
+	if err := s.db.Table("users").Where("email = ?", resetToken.Email).Count(&userCount).Error; err != nil {
 		if s.logger != nil {
-			s.logger.Error("failed to update password in database", zap.Error(err), zap.String("email", resetToken.Email))
+			s.logger.Error("failed to check user existence", zap.Error(err), zap.String("email", resetToken.Email))
 		}
-		return fmt.Errorf("failed to update password: %w", err)
+		return fmt.Errorf("failed to verify user: %w", err)
+	}
+
+	if userCount == 0 {
+		if s.logger != nil {
+			s.logger.Warn("password reset attempted for non-existent user", zap.String("email", resetToken.Email))
+		}
+		return fmt.Errorf("user not found")
+	}
+
+	result := s.db.Table("users").Where("email = ?", resetToken.Email).Update("password", hashedPassword)
+	if result.Error != nil {
+		if s.logger != nil {
+			s.logger.Error("failed to update password in database", zap.Error(result.Error), zap.String("email", resetToken.Email))
+		}
+		return fmt.Errorf("failed to update password: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		if s.logger != nil {
+			s.logger.Warn("password update affected no rows", zap.String("email", resetToken.Email))
+		}
+		return fmt.Errorf("user not found")
 	}
 
 	if s.logger != nil {
