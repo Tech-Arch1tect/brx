@@ -517,12 +517,21 @@ func (s *Service) CreateEmailVerificationToken(email string) (*EmailVerification
 		return nil, fmt.Errorf("database is required for email verification functionality")
 	}
 
+	now := time.Now()
+	if err := s.db.Model(&EmailVerificationToken{}).
+		Where("email = ? AND used = ? AND expires_at > ?", email, false, now).
+		Update("used", true).Error; err != nil {
+		if s.logger != nil {
+			s.logger.Error("failed to invalidate existing email verification tokens", zap.Error(err), zap.String("email", email))
+		}
+		return nil, fmt.Errorf("failed to invalidate existing tokens: %w", err)
+	}
+
 	token, err := s.generateEmailVerificationToken()
 	if err != nil {
 		return nil, err
 	}
 
-	now := time.Now()
 	verificationToken := &EmailVerificationToken{
 		Email:     email,
 		Token:     token,
@@ -659,10 +668,39 @@ func (s *Service) VerifyEmail(token string) error {
 		return err
 	}
 
-	if err := s.db.Table("users").Where("email = ?", verificationToken.Email).Update("email_verified_at", time.Now()).Error; err != nil {
-		return fmt.Errorf("failed to mark email as verified: %w", err)
+	var userCount int64
+	if err := s.db.Table("users").Where("email = ?", verificationToken.Email).Count(&userCount).Error; err != nil {
+		if s.logger != nil {
+			s.logger.Error("failed to check user existence for email verification", zap.Error(err), zap.String("email", verificationToken.Email))
+		}
+		return fmt.Errorf("failed to verify user: %w", err)
 	}
 
+	if userCount == 0 {
+		if s.logger != nil {
+			s.logger.Warn("email verification attempted for non-existent user", zap.String("email", verificationToken.Email))
+		}
+		return fmt.Errorf("user not found")
+	}
+
+	result := s.db.Table("users").Where("email = ?", verificationToken.Email).Update("email_verified_at", time.Now())
+	if result.Error != nil {
+		if s.logger != nil {
+			s.logger.Error("failed to mark email as verified", zap.Error(result.Error), zap.String("email", verificationToken.Email))
+		}
+		return fmt.Errorf("failed to mark email as verified: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		if s.logger != nil {
+			s.logger.Warn("email verification update affected no rows", zap.String("email", verificationToken.Email))
+		}
+		return fmt.Errorf("user not found")
+	}
+
+	if s.logger != nil {
+		s.logger.Info("email verification completed successfully", zap.String("email", verificationToken.Email))
+	}
 	return nil
 }
 
@@ -676,7 +714,7 @@ func (s *Service) IsEmailVerified(email string) bool {
 	}
 
 	if s.db == nil {
-		return true
+		return false
 	}
 
 	var count int64
