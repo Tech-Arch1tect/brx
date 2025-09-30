@@ -120,18 +120,21 @@ func SessionServiceMiddleware(service SessionService) echo.MiddlewareFunc {
 				if manager != nil {
 					token := manager.Token(c.Request().Context())
 					if token != "" {
-						go func() {
+						userID := convertToUint(GetUserID(c))
+						if userID == 0 {
+							return err
+						}
+
+						ipAddress := c.RealIP()
+						userAgent := c.Request().UserAgent()
+						expiresAt := time.Now().Add(manager.config.MaxAge)
+
+						go func(token string, userID uint, ipAddress, userAgent string, expiresAt time.Time) {
 							exists, err := service.SessionExists(token)
 							if err == nil && !exists {
-								userID := convertToUint(GetUserID(c))
-								if userID > 0 {
-									ipAddress := c.RealIP()
-									userAgent := c.Request().UserAgent()
-									expiresAt := time.Now().Add(manager.config.MaxAge)
-									_ = service.TrackSession(userID, token, SessionTypeWeb, ipAddress, userAgent, expiresAt)
-								}
+								_ = service.TrackSession(userID, token, SessionTypeWeb, ipAddress, userAgent, expiresAt)
 							}
-						}()
+						}(token, userID, ipAddress, userAgent, expiresAt)
 					}
 				}
 			}
