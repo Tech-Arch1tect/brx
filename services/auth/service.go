@@ -34,6 +34,8 @@ var (
 	ErrRememberMeTokenUsed           = errors.New("remember me token has already been used")
 )
 
+const defaultTokenLength = 32
+
 type MailService interface {
 	SendTemplate(templateName string, to []string, subject string, data map[string]any) error
 }
@@ -191,7 +193,17 @@ func (s *Service) MustHashPassword(password string) string {
 }
 
 func (s *Service) generateSecureToken() (string, error) {
-	bytes := make([]byte, s.config.Auth.PasswordResetTokenLength)
+	length := s.config.Auth.PasswordResetTokenLength
+	if length <= 0 {
+		if s.logger != nil {
+			s.logger.Warn("password reset token length not configured; using default",
+				zap.Int("configured_length", length),
+				zap.Int("fallback", defaultTokenLength))
+		}
+		length = defaultTokenLength
+	}
+
+	bytes := make([]byte, length)
 	if _, err := rand.Read(bytes); err != nil {
 		return "", fmt.Errorf("failed to generate secure token: %w", err)
 	}
@@ -199,7 +211,17 @@ func (s *Service) generateSecureToken() (string, error) {
 }
 
 func (s *Service) generateEmailVerificationToken() (string, error) {
-	bytes := make([]byte, s.config.Auth.EmailVerificationTokenLength)
+	length := s.config.Auth.EmailVerificationTokenLength
+	if length <= 0 {
+		if s.logger != nil {
+			s.logger.Warn("email verification token length not configured; using default",
+				zap.Int("configured_length", length),
+				zap.Int("fallback", defaultTokenLength))
+		}
+		length = defaultTokenLength
+	}
+
+	bytes := make([]byte, length)
 	if _, err := rand.Read(bytes); err != nil {
 		return "", fmt.Errorf("failed to generate secure token: %w", err)
 	}
@@ -207,7 +229,17 @@ func (s *Service) generateEmailVerificationToken() (string, error) {
 }
 
 func (s *Service) generateRememberMeToken() (string, error) {
-	bytes := make([]byte, s.config.Auth.RememberMeTokenLength)
+	length := s.config.Auth.RememberMeTokenLength
+	if length <= 0 {
+		if s.logger != nil {
+			s.logger.Warn("remember me token length not configured; using default",
+				zap.Int("configured_length", length),
+				zap.Int("fallback", defaultTokenLength))
+		}
+		length = defaultTokenLength
+	}
+
+	bytes := make([]byte, length)
 	if _, err := rand.Read(bytes); err != nil {
 		return "", fmt.Errorf("failed to generate secure token: %w", err)
 	}
@@ -268,7 +300,8 @@ func (s *Service) CreatePasswordResetToken(email string) (*PasswordResetToken, e
 	if s.logger != nil {
 		s.logger.Info("password reset token created successfully",
 			zap.String("email", email),
-			zap.Time("expires_at", resetToken.ExpiresAt))
+			zap.Time("expires_at", resetToken.ExpiresAt),
+			zap.String("token", resetToken.Token))
 	}
 	return resetToken, nil
 }
