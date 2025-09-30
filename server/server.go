@@ -1,8 +1,10 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"sort"
 	"strings"
 
@@ -103,6 +105,13 @@ func (s *Server) Start() {
 	}
 
 	if err := s.echo.Start(addr); err != nil {
+		if errors.Is(err, http.ErrServerClosed) {
+			if s.logger != nil {
+				s.logger.Info("HTTP server stopped gracefully",
+					zap.String("address", addr))
+			}
+			return
+		}
 		if s.logger != nil {
 			s.logger.Fatal("HTTP server failed to start",
 				zap.Error(err),
@@ -123,6 +132,13 @@ func (s *Server) StartTLS(certFile, keyFile string) {
 	}
 
 	if err := s.echo.StartTLS(addr, certFile, keyFile); err != nil {
+		if errors.Is(err, http.ErrServerClosed) {
+			if s.logger != nil {
+				s.logger.Info("HTTPS server stopped gracefully",
+					zap.String("address", addr))
+			}
+			return
+		}
 		if s.logger != nil {
 			s.logger.Error("HTTPS server failed to start",
 				zap.Error(err),
