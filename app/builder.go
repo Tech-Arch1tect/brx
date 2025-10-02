@@ -249,12 +249,6 @@ type ServiceContainer struct {
 	inertia   *inertia.Service
 }
 
-type SSLConfig struct {
-	Enabled  bool
-	CertFile string
-	KeyFile  string
-}
-
 func (b *AppBuilder) buildServices(logger *logging.Service) (*ServiceContainer, error) {
 	services := &ServiceContainer{}
 
@@ -285,7 +279,7 @@ func (b *AppBuilder) buildServices(logger *logging.Service) (*ServiceContainer, 
 func (b *AppBuilder) buildFxOptions(services *ServiceContainer, logger *logging.Service) []fx.Option {
 	var options []fx.Option
 
-	sslConfig := &SSLConfig{
+	sslConfig := &server.SSLConfig{
 		Enabled:  b.services["ssl"],
 		CertFile: b.sslCertFile,
 		KeyFile:  b.sslKeyFile,
