@@ -60,6 +60,10 @@ func Middleware(cfg Config) echo.MiddlewareFunc {
 
 			session.LoginWithTOTPService(c, rememberToken.UserID, cfg.TOTPService)
 
+			if cfg.TOTPService != nil && cfg.TOTPService.IsUserTOTPEnabled(rememberToken.UserID) {
+				session.SetTOTPVerified(c, true)
+			}
+
 			if cfg.AuthService.ShouldRotateRememberMeToken() {
 				if newToken, err := cfg.AuthService.RotateRememberMeToken(cookie.Value); err == nil {
 					setRememberCookie(c, cfg.AuthService, newToken.Token, newToken.ExpiresAt)
