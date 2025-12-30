@@ -80,6 +80,37 @@ func (c *HTTPClient) PostForm(path string, data url.Values) (*Response, error) {
 	})
 }
 
+func (c *HTTPClient) Put(path string, body interface{}) (*Response, error) {
+	return c.Request(&RequestOptions{
+		Method: "PUT",
+		Path:   path,
+		Body:   body,
+	})
+}
+
+func (c *HTTPClient) Patch(path string, body interface{}) (*Response, error) {
+	return c.Request(&RequestOptions{
+		Method: "PATCH",
+		Path:   path,
+		Body:   body,
+	})
+}
+
+func (c *HTTPClient) Delete(path string) (*Response, error) {
+	return c.Request(&RequestOptions{
+		Method: "DELETE",
+		Path:   path,
+	})
+}
+
+func (c *HTTPClient) DeleteWithBody(path string, body interface{}) (*Response, error) {
+	return c.Request(&RequestOptions{
+		Method: "DELETE",
+		Path:   path,
+		Body:   body,
+	})
+}
+
 func (c *HTTPClient) Request(opts *RequestOptions) (*Response, error) {
 	fullURL := c.BaseURL + opts.Path
 
