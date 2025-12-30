@@ -16,13 +16,14 @@ import (
 )
 
 type E2EApp struct {
-	App        *app.App
-	TestServer *httptest.Server
-	BaseURL    string
-	Config     *config.Config
-	DB         *gorm.DB
-	AuthSvc    *auth.Service
-	cleanup    func()
+	App             *app.App
+	TestServer      *httptest.Server
+	BaseURL         string
+	Config          *config.Config
+	DB              *gorm.DB
+	AuthSvc         *auth.Service
+	cleanup         func()
+	CoverageTracker *CoverageTracker
 }
 
 type TestConfig struct {
@@ -31,6 +32,8 @@ type TestConfig struct {
 	EnableDebugMode bool
 	TestPort        int
 	OverrideConfig  func(*config.Config) *config.Config
+	EnableCoverage  bool
+	ExcludePatterns []string
 }
 
 type HTTPClient struct {
@@ -218,5 +221,61 @@ func BuildTestApp(builder *app.AppBuilder, testConfig *TestConfig) (*E2EApp, err
 		AuthSvc: capturedAuthSvc,
 	}
 
+	if testConfig.EnableCoverage {
+		e2eApp.CoverageTracker = NewCoverageTracker()
+		for _, pattern := range testConfig.ExcludePatterns {
+			e2eApp.CoverageTracker.AddExcludePattern(pattern)
+		}
+
+		if echoServer := builtApp.Server(); echoServer != nil {
+			echoServer.Use(e2eApp.CoverageTracker.TrackingMiddleware())
+		}
+	}
+
 	return e2eApp, nil
+}
+
+func (e *E2EApp) InitCoverage() {
+	if e.CoverageTracker == nil {
+		return
+	}
+	if echoServer := e.App.Server(); echoServer != nil {
+		e.CoverageTracker.RegisterRoutes(echoServer)
+	}
+}
+
+func (e *E2EApp) GetCoverageStats() CoverageStats {
+	if e.CoverageTracker == nil {
+		return CoverageStats{}
+	}
+	return e.CoverageTracker.GetStats()
+}
+
+func (e *E2EApp) PrintCoverageReport() {
+	if e.CoverageTracker == nil {
+		fmt.Println("Coverage tracking not enabled")
+		return
+	}
+	e.CoverageTracker.PrintReport()
+}
+
+func (e *E2EApp) GetMissingRoutes() []RouteInfo {
+	if e.CoverageTracker == nil {
+		return nil
+	}
+	return e.CoverageTracker.GetMissingRoutes()
+}
+
+func (e *E2EApp) AssertMinimumCoverage(t interface {
+	Fatalf(format string, args ...any)
+}, minPercent float64) {
+	if e.CoverageTracker == nil {
+		t.Fatalf("Coverage tracking not enabled")
+		return
+	}
+	stats := e.CoverageTracker.GetStats()
+	if stats.Coverage < minPercent {
+		e.CoverageTracker.PrintReport()
+		t.Fatalf("Coverage %.1f%% is below minimum required %.1f%%", stats.Coverage, minPercent)
+	}
 }
