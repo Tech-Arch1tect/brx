@@ -221,3 +221,12 @@ func (h *AuthHelper) CleanAuthTables() error {
 
 	return nil
 }
+
+func (h *AuthHelper) EnableTOTPForUser(t *testing.T, userID uint) {
+	err := h.DB.Table("totp_secrets").Create(map[string]interface{}{
+		"user_id": userID,
+		"secret":  "TESTSECRET1234567890123456",
+		"enabled": true,
+	}).Error
+	require.NoError(t, err, "failed to enable TOTP for test user")
+}
