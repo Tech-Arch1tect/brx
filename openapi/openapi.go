@@ -276,11 +276,18 @@ func generateSchema(example any) *openapi3.Schema {
 		return &openapi3.Schema{Type: &openapi3.Types{"object"}}
 	}
 
-	return generateSchemaFromType(reflect.TypeOf(example))
+	visited := make(map[string]bool)
+	return generateSchemaFromType(reflect.TypeOf(example), visited)
 }
 
-func generateSchemaFromType(t reflect.Type) *openapi3.Schema {
+func getTypeKey(t reflect.Type) string {
+	if t.PkgPath() != "" {
+		return t.PkgPath() + "." + t.Name()
+	}
+	return t.String()
+}
 
+func generateSchemaFromType(t reflect.Type, visited map[string]bool) *openapi3.Schema {
 	if t.Kind() == reflect.Ptr {
 		t = t.Elem()
 	}
@@ -299,17 +306,17 @@ func generateSchemaFromType(t reflect.Type) *openapi3.Schema {
 	case reflect.Slice, reflect.Array:
 		return &openapi3.Schema{
 			Type:  &openapi3.Types{"array"},
-			Items: &openapi3.SchemaRef{Value: generateSchemaFromType(t.Elem())},
+			Items: &openapi3.SchemaRef{Value: generateSchemaFromType(t.Elem(), visited)},
 		}
 	case reflect.Map:
 		return &openapi3.Schema{
 			Type: &openapi3.Types{"object"},
 			AdditionalProperties: openapi3.AdditionalProperties{
-				Schema: &openapi3.SchemaRef{Value: generateSchemaFromType(t.Elem())},
+				Schema: &openapi3.SchemaRef{Value: generateSchemaFromType(t.Elem(), visited)},
 			},
 		}
 	case reflect.Struct:
-		return generateStructSchema(t)
+		return generateStructSchema(t, visited)
 	case reflect.Interface:
 		return &openapi3.Schema{Type: &openapi3.Types{"object"}}
 	default:
@@ -317,10 +324,19 @@ func generateSchemaFromType(t reflect.Type) *openapi3.Schema {
 	}
 }
 
-func generateStructSchema(t reflect.Type) *openapi3.Schema {
-
+func generateStructSchema(t reflect.Type, visited map[string]bool) *openapi3.Schema {
 	if t.PkgPath() == "time" && t.Name() == "Time" {
 		return &openapi3.Schema{Type: &openapi3.Types{"string"}, Format: "date-time"}
+	}
+
+	typeKey := getTypeKey(t)
+	if typeKey != "" && visited[typeKey] {
+		return &openapi3.Schema{Type: &openapi3.Types{"object"}}
+	}
+
+	if typeKey != "" {
+		visited[typeKey] = true
+		defer func() { delete(visited, typeKey) }()
 	}
 
 	schema := &openapi3.Schema{
@@ -356,7 +372,7 @@ func generateStructSchema(t reflect.Type) *openapi3.Schema {
 			}
 		}
 
-		fieldSchema := generateSchemaFromType(field.Type)
+		fieldSchema := generateSchemaFromType(field.Type, visited)
 
 		if doc := field.Tag.Get("doc"); doc != "" {
 			fieldSchema.Description = doc
