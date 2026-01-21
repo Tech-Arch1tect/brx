@@ -358,6 +358,22 @@ func generateStructSchema(t reflect.Type, visited map[string]bool) *openapi3.Sch
 			continue
 		}
 
+		if field.Anonymous && jsonTag == "" {
+			fieldType := field.Type
+			if fieldType.Kind() == reflect.Ptr {
+				fieldType = fieldType.Elem()
+			}
+			if fieldType.Kind() == reflect.Struct {
+				embeddedSchema := generateStructSchema(fieldType, visited)
+				for propName, propSchema := range embeddedSchema.Properties {
+					schema.Properties[propName] = propSchema
+				}
+
+				required = append(required, embeddedSchema.Required...)
+				continue
+			}
+		}
+
 		name := field.Name
 		tagParts := strings.Split(jsonTag, ",")
 		if len(tagParts) > 0 && tagParts[0] != "" {
