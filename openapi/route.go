@@ -107,7 +107,7 @@ func (rb *RouteBuilder) findOrCreateParam(name, in string) *openapi3.Parameter {
 }
 
 func (rb *RouteBuilder) Body(example any, description string) *RouteBuilder {
-	schema := generateSchema(example)
+	schemaRef := rb.openapi.generateSchema(example)
 
 	rb.operation.RequestBody = &openapi3.RequestBodyRef{
 		Value: &openapi3.RequestBody{
@@ -115,7 +115,7 @@ func (rb *RouteBuilder) Body(example any, description string) *RouteBuilder {
 			Required:    true,
 			Content: openapi3.Content{
 				"application/json": &openapi3.MediaType{
-					Schema: &openapi3.SchemaRef{Value: schema},
+					Schema: schemaRef,
 				},
 			},
 		},
@@ -133,10 +133,10 @@ func (rb *RouteBuilder) Response(statusCode int, example any, description string
 	var content openapi3.Content
 
 	if example != nil {
-		schema := generateSchema(example)
+		schemaRef := rb.openapi.generateSchema(example)
 		content = openapi3.Content{
 			"application/json": &openapi3.MediaType{
-				Schema: &openapi3.SchemaRef{Value: schema},
+				Schema: schemaRef,
 			},
 		}
 	}

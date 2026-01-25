@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -13,8 +14,10 @@ import (
 )
 
 type OpenAPI struct {
-	spec *openapi3.T
-	mu   sync.RWMutex
+	spec               *openapi3.T
+	mu                 sync.RWMutex
+	schemaRegistry     map[string]string
+	schemaNameRegistry map[string]string
 }
 
 func New(title, version string) *OpenAPI {
@@ -29,7 +32,9 @@ func New(title, version string) *OpenAPI {
 	}
 
 	return &OpenAPI{
-		spec: spec,
+		spec:               spec,
+		schemaRegistry:     make(map[string]string),
+		schemaNameRegistry: make(map[string]string),
 	}
 }
 
@@ -148,7 +153,34 @@ func (o *OpenAPI) AddSchema(name string, example any) *OpenAPI {
 	if o.spec.Components.Schemas == nil {
 		o.spec.Components.Schemas = make(openapi3.Schemas)
 	}
-	schema := generateSchema(example)
+
+	if example == nil {
+		o.spec.Components.Schemas[name] = &openapi3.SchemaRef{
+			Value: &openapi3.Schema{Type: &openapi3.Types{"object"}},
+		}
+		return o
+	}
+
+	t := reflect.TypeOf(example)
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+
+	visited := make(map[string]bool)
+	var schema *openapi3.Schema
+	if t.Kind() == reflect.Struct {
+		schema = o.buildStructSchema(t, visited)
+	} else {
+		schemaRef := o.generateSchemaFromType(t, visited, true)
+		schema = schemaRef.Value
+	}
+
+	typeKey := getTypeKey(t)
+	if typeKey != "" && t.Kind() == reflect.Struct {
+		o.schemaRegistry[typeKey] = name
+		o.schemaNameRegistry[name] = typeKey
+	}
+
 	o.spec.Components.Schemas[name] = &openapi3.SchemaRef{Value: schema}
 	return o
 }
@@ -271,13 +303,16 @@ func echoPathToOpenAPI(path string) string {
 	return strings.Join(parts, "/")
 }
 
-func generateSchema(example any) *openapi3.Schema {
+func (o *OpenAPI) generateSchema(example any) *openapi3.SchemaRef {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
 	if example == nil {
-		return &openapi3.Schema{Type: &openapi3.Types{"object"}}
+		return &openapi3.SchemaRef{Value: &openapi3.Schema{Type: &openapi3.Types{"object"}}}
 	}
 
 	visited := make(map[string]bool)
-	return generateSchemaFromType(reflect.TypeOf(example), visited)
+	return o.generateSchemaFromType(reflect.TypeOf(example), visited, false)
 }
 
 func getTypeKey(t reflect.Type) string {
@@ -287,49 +322,110 @@ func getTypeKey(t reflect.Type) string {
 	return t.String()
 }
 
-func generateSchemaFromType(t reflect.Type, visited map[string]bool) *openapi3.Schema {
-	if t.Kind() == reflect.Ptr {
-		t = t.Elem()
+func (o *OpenAPI) generateSchemaFromType(t reflect.Type, visited map[string]bool, inline bool) *openapi3.SchemaRef {
+	if t.Kind() == reflect.Pointer {
+		elemType := t.Elem()
+		innerRef := o.generateSchemaFromType(elemType, visited, inline)
+
+		if innerRef.Ref != "" {
+			return &openapi3.SchemaRef{
+				Value: &openapi3.Schema{
+					AllOf:    openapi3.SchemaRefs{innerRef},
+					Nullable: true,
+				},
+			}
+		}
+
+		if innerRef.Value != nil {
+			innerRef.Value.Nullable = true
+		}
+		return innerRef
 	}
 
 	switch t.Kind() {
 	case reflect.String:
-		return &openapi3.Schema{Type: &openapi3.Types{"string"}}
+		return &openapi3.SchemaRef{Value: &openapi3.Schema{Type: &openapi3.Types{"string"}}}
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return &openapi3.Schema{Type: &openapi3.Types{"integer"}}
+		return &openapi3.SchemaRef{Value: &openapi3.Schema{Type: &openapi3.Types{"integer"}}}
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return &openapi3.Schema{Type: &openapi3.Types{"integer"}, Min: ptr(0.0)}
+		return &openapi3.SchemaRef{Value: &openapi3.Schema{Type: &openapi3.Types{"integer"}, Min: ptr(0.0)}}
 	case reflect.Float32, reflect.Float64:
-		return &openapi3.Schema{Type: &openapi3.Types{"number"}}
+		return &openapi3.SchemaRef{Value: &openapi3.Schema{Type: &openapi3.Types{"number"}}}
 	case reflect.Bool:
-		return &openapi3.Schema{Type: &openapi3.Types{"boolean"}}
+		return &openapi3.SchemaRef{Value: &openapi3.Schema{Type: &openapi3.Types{"boolean"}}}
 	case reflect.Slice, reflect.Array:
-		return &openapi3.Schema{
-			Type:  &openapi3.Types{"array"},
-			Items: &openapi3.SchemaRef{Value: generateSchemaFromType(t.Elem(), visited)},
+		return &openapi3.SchemaRef{
+			Value: &openapi3.Schema{
+				Type:  &openapi3.Types{"array"},
+				Items: o.generateSchemaFromType(t.Elem(), visited, false),
+			},
 		}
 	case reflect.Map:
-		return &openapi3.Schema{
-			Type: &openapi3.Types{"object"},
-			AdditionalProperties: openapi3.AdditionalProperties{
-				Schema: &openapi3.SchemaRef{Value: generateSchemaFromType(t.Elem(), visited)},
+		return &openapi3.SchemaRef{
+			Value: &openapi3.Schema{
+				Type: &openapi3.Types{"object"},
+				AdditionalProperties: openapi3.AdditionalProperties{
+					Schema: o.generateSchemaFromType(t.Elem(), visited, false),
+				},
 			},
 		}
 	case reflect.Struct:
-		return generateStructSchema(t, visited)
+		return o.generateStructSchema(t, visited, inline)
 	case reflect.Interface:
-		return &openapi3.Schema{Type: &openapi3.Types{"object"}}
+		return &openapi3.SchemaRef{Value: &openapi3.Schema{Type: &openapi3.Types{"object"}}}
 	default:
-		return &openapi3.Schema{Type: &openapi3.Types{"object"}}
+		return &openapi3.SchemaRef{Value: &openapi3.Schema{Type: &openapi3.Types{"object"}}}
 	}
 }
 
-func generateStructSchema(t reflect.Type, visited map[string]bool) *openapi3.Schema {
+func (o *OpenAPI) generateStructSchema(t reflect.Type, visited map[string]bool, inline bool) *openapi3.SchemaRef {
 	if t.PkgPath() == "time" && t.Name() == "Time" {
-		return &openapi3.Schema{Type: &openapi3.Types{"string"}, Format: "date-time"}
+		return &openapi3.SchemaRef{Value: &openapi3.Schema{Type: &openapi3.Types{"string"}, Format: "date-time"}}
 	}
 
 	typeKey := getTypeKey(t)
+
+	if inline {
+		return &openapi3.SchemaRef{Value: o.buildStructSchema(t, visited)}
+	}
+
+	if t.Name() != "" && t.PkgPath() != "" {
+		if registeredName, exists := o.schemaRegistry[typeKey]; exists {
+			return &openapi3.SchemaRef{Ref: "#/components/schemas/" + registeredName}
+		}
+
+		schemaName := t.Name()
+		if existingTypeKey, nameExists := o.schemaNameRegistry[schemaName]; nameExists && existingTypeKey != typeKey {
+			baseName := t.Name()
+			suffix := 2
+			for {
+				schemaName = baseName + strconv.Itoa(suffix)
+				if _, taken := o.schemaNameRegistry[schemaName]; !taken {
+					break
+				}
+				suffix++
+			}
+		}
+
+		o.schemaRegistry[typeKey] = schemaName
+		o.schemaNameRegistry[schemaName] = typeKey
+
+		schema := o.buildStructSchema(t, visited)
+
+		if o.spec.Components.Schemas == nil {
+			o.spec.Components.Schemas = make(openapi3.Schemas)
+		}
+		o.spec.Components.Schemas[schemaName] = &openapi3.SchemaRef{Value: schema}
+
+		return &openapi3.SchemaRef{Ref: "#/components/schemas/" + schemaName}
+	}
+
+	return &openapi3.SchemaRef{Value: o.buildStructSchema(t, visited)}
+}
+
+func (o *OpenAPI) buildStructSchema(t reflect.Type, visited map[string]bool) *openapi3.Schema {
+	typeKey := getTypeKey(t)
+
 	if typeKey != "" && visited[typeKey] {
 		return &openapi3.Schema{Type: &openapi3.Types{"object"}}
 	}
@@ -358,18 +454,31 @@ func generateStructSchema(t reflect.Type, visited map[string]bool) *openapi3.Sch
 			continue
 		}
 
+		inlineField := field.Tag.Get("openapi") == "inline"
+
 		if field.Anonymous && jsonTag == "" {
 			fieldType := field.Type
-			if fieldType.Kind() == reflect.Ptr {
+			if fieldType.Kind() == reflect.Pointer {
 				fieldType = fieldType.Elem()
 			}
 			if fieldType.Kind() == reflect.Struct {
-				embeddedSchema := generateStructSchema(fieldType, visited)
-				for propName, propSchema := range embeddedSchema.Properties {
-					schema.Properties[propName] = propSchema
+				embeddedRef := o.generateStructSchema(fieldType, visited, false)
+				var embeddedSchema *openapi3.Schema
+				if embeddedRef.Ref != "" {
+					refName := strings.TrimPrefix(embeddedRef.Ref, "#/components/schemas/")
+					if schemaRef, ok := o.spec.Components.Schemas[refName]; ok {
+						embeddedSchema = schemaRef.Value
+					}
+				} else {
+					embeddedSchema = embeddedRef.Value
 				}
 
-				required = append(required, embeddedSchema.Required...)
+				if embeddedSchema != nil {
+					for propName, propSchema := range embeddedSchema.Properties {
+						schema.Properties[propName] = propSchema
+					}
+					required = append(required, embeddedSchema.Required...)
+				}
 				continue
 			}
 		}
@@ -388,17 +497,33 @@ func generateStructSchema(t reflect.Type, visited map[string]bool) *openapi3.Sch
 			}
 		}
 
-		fieldSchema := generateSchemaFromType(field.Type, visited)
+		fieldSchemaRef := o.generateSchemaFromType(field.Type, visited, inlineField)
 
-		if doc := field.Tag.Get("doc"); doc != "" {
-			fieldSchema.Description = doc
+		if fieldSchemaRef.Ref != "" {
+			doc := field.Tag.Get("doc")
+			ex := field.Tag.Get("example")
+			if doc != "" || ex != "" {
+				wrapper := &openapi3.Schema{
+					AllOf: openapi3.SchemaRefs{fieldSchemaRef},
+				}
+				if doc != "" {
+					wrapper.Description = doc
+				}
+				if ex != "" {
+					wrapper.Example = ex
+				}
+				fieldSchemaRef = &openapi3.SchemaRef{Value: wrapper}
+			}
+		} else if fieldSchemaRef.Value != nil {
+			if doc := field.Tag.Get("doc"); doc != "" {
+				fieldSchemaRef.Value.Description = doc
+			}
+			if ex := field.Tag.Get("example"); ex != "" {
+				fieldSchemaRef.Value.Example = ex
+			}
 		}
 
-		if ex := field.Tag.Get("example"); ex != "" {
-			fieldSchema.Example = ex
-		}
-
-		schema.Properties[name] = &openapi3.SchemaRef{Value: fieldSchema}
+		schema.Properties[name] = fieldSchemaRef
 
 		if !isOptional {
 			required = append(required, name)
