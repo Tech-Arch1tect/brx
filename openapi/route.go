@@ -359,14 +359,14 @@ type ParamBuilder struct {
 	param *openapi3.Parameter
 }
 
-func (pb *ParamBuilder) Required() *ParamBuilder {
+func (pb *ParamBuilder) Required() *RouteBuilder {
 	pb.param.Required = true
-	return pb
+	return pb.route
 }
 
-func (pb *ParamBuilder) Optional() *ParamBuilder {
+func (pb *ParamBuilder) Optional() *RouteBuilder {
 	pb.param.Required = false
-	return pb
+	return pb.route
 }
 
 func (pb *ParamBuilder) Type(t string) *ParamBuilder {
