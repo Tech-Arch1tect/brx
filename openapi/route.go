@@ -129,6 +129,76 @@ func (rb *RouteBuilder) BodyOptional(example any, description string) *RouteBuil
 	return rb
 }
 
+func (rb *RouteBuilder) BodyMultipart(description string) *MultipartBuilder {
+	return &MultipartBuilder{
+		route:       rb,
+		description: description,
+		properties:  make(openapi3.Schemas),
+		required:    []string{},
+	}
+}
+
+type MultipartBuilder struct {
+	route       *RouteBuilder
+	description string
+	properties  openapi3.Schemas
+	required    []string
+}
+
+func (mb *MultipartBuilder) Field(name string, required bool) *MultipartBuilder {
+	mb.properties[name] = &openapi3.SchemaRef{
+		Value: &openapi3.Schema{Type: &openapi3.Types{"string"}},
+	}
+	if required {
+		mb.required = append(mb.required, name)
+	}
+	return mb
+}
+
+func (mb *MultipartBuilder) FileField(name string, required bool) *MultipartBuilder {
+	mb.properties[name] = &openapi3.SchemaRef{
+		Value: &openapi3.Schema{
+			Type:   &openapi3.Types{"string"},
+			Format: "binary",
+		},
+	}
+	if required {
+		mb.required = append(mb.required, name)
+	}
+	return mb
+}
+
+func (mb *MultipartBuilder) Done() *RouteBuilder {
+	mb.route.operation.RequestBody = &openapi3.RequestBodyRef{
+		Value: &openapi3.RequestBody{
+			Description: mb.description,
+			Required:    len(mb.required) > 0,
+			Content: openapi3.Content{
+				"multipart/form-data": &openapi3.MediaType{
+					Schema: &openapi3.SchemaRef{
+						Value: &openapi3.Schema{
+							Type:       &openapi3.Types{"object"},
+							Properties: mb.properties,
+							Required:   mb.required,
+						},
+					},
+				},
+			},
+		},
+	}
+	return mb.route
+}
+
+func (mb *MultipartBuilder) Response(statusCode int, example any, description string) *RouteBuilder {
+	mb.Done()
+	return mb.route.Response(statusCode, example, description)
+}
+
+func (mb *MultipartBuilder) Build() {
+	mb.Done()
+	mb.route.Build()
+}
+
 func (rb *RouteBuilder) Response(statusCode int, example any, description string) *RouteBuilder {
 	var content openapi3.Content
 
@@ -145,6 +215,30 @@ func (rb *RouteBuilder) Response(statusCode int, example any, description string
 		Value: &openapi3.Response{
 			Description: &description,
 			Content:     content,
+		},
+	})
+
+	return rb
+}
+
+func (rb *RouteBuilder) ResponseBinary(statusCode int, contentType, description string) *RouteBuilder {
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	rb.operation.Responses.Set(statusCodeToString(statusCode), &openapi3.ResponseRef{
+		Value: &openapi3.Response{
+			Description: &description,
+			Content: openapi3.Content{
+				contentType: &openapi3.MediaType{
+					Schema: &openapi3.SchemaRef{
+						Value: &openapi3.Schema{
+							Type:   &openapi3.Types{"string"},
+							Format: "binary",
+						},
+					},
+				},
+			},
 		},
 	})
 
