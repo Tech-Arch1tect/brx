@@ -3,6 +3,7 @@ package e2etesting
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"time"
@@ -16,24 +17,28 @@ import (
 )
 
 type E2EApp struct {
-	App             *app.App
-	TestServer      *httptest.Server
-	BaseURL         string
-	Config          *config.Config
-	DB              *gorm.DB
-	AuthSvc         *auth.Service
-	cleanup         func()
-	CoverageTracker *CoverageTracker
+	App              *app.App
+	TestServer       *httptest.Server
+	BaseURL          string
+	Config           *config.Config
+	DB               *gorm.DB
+	AuthSvc          *auth.Service
+	cleanup          func()
+	CoverageTracker  *CoverageTracker
+	readinessCheck   func(ctx context.Context, app *E2EApp) error
+	readinessTimeout time.Duration
 }
 
 type TestConfig struct {
-	DatabaseURL     string
-	DisableLogging  bool
-	EnableDebugMode bool
-	TestPort        int
-	OverrideConfig  func(*config.Config) *config.Config
-	EnableCoverage  bool
-	ExcludePatterns []string
+	DatabaseURL      string
+	DisableLogging   bool
+	EnableDebugMode  bool
+	TestPort         int
+	OverrideConfig   func(*config.Config) *config.Config
+	EnableCoverage   bool
+	ExcludePatterns  []string
+	ReadinessCheck   func(ctx context.Context, app *E2EApp) error
+	ReadinessTimeout time.Duration
 }
 
 type HTTPClient struct {
@@ -83,7 +88,7 @@ func createTestConfig(testConfig *TestConfig) *config.Config {
 		},
 		Server: config.ServerConfig{
 			Host: "localhost",
-			Port: "8081",
+			Port: "0",
 		},
 		Database: config.DatabaseConfig{
 			Driver:      "sqlite",
@@ -170,11 +175,77 @@ func (e *E2EApp) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to start test app: %w", err)
 	}
 
-	time.Sleep(200 * time.Millisecond)
+	if err := e.waitForListener(); err != nil {
+		return fmt.Errorf("server failed to become ready: %w", err)
+	}
 
-	e.BaseURL = fmt.Sprintf("http://localhost:%s", e.Config.Server.Port)
+	if echoServer := e.App.Server(); echoServer != nil {
+		if addr := echoServer.ListenerAddr(); addr != nil {
+			e.BaseURL = fmt.Sprintf("http://%s", addr.String())
+		} else {
+			e.BaseURL = fmt.Sprintf("http://localhost:%s", e.Config.Server.Port)
+		}
+	} else {
+		e.BaseURL = fmt.Sprintf("http://localhost:%s", e.Config.Server.Port)
+	}
+
+	if e.readinessCheck != nil {
+		if err := e.waitForAppReady(ctx); err != nil {
+			return fmt.Errorf("app readiness check failed: %w", err)
+		}
+	}
 
 	return nil
+}
+
+func (e *E2EApp) waitForListener() error {
+	echoServer := e.App.Server()
+	if echoServer == nil {
+		return fmt.Errorf("echo server not initialized")
+	}
+
+	deadline := time.After(e.readinessTimeout)
+	ticker := time.NewTicker(5 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		if addr := echoServer.ListenerAddr(); addr != nil {
+			conn, err := net.DialTimeout("tcp", addr.String(), 100*time.Millisecond)
+			if err == nil {
+				conn.Close()
+				return nil
+			}
+		}
+		select {
+		case <-ticker.C:
+			continue
+		case <-deadline:
+			return fmt.Errorf("timeout after %s waiting for HTTP listener", e.readinessTimeout)
+		}
+	}
+}
+
+func (e *E2EApp) waitForAppReady(ctx context.Context) error {
+	deadline := time.After(e.readinessTimeout)
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+
+	var lastErr error
+	for {
+		if err := e.readinessCheck(ctx, e); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+		select {
+		case <-ticker.C:
+			continue
+		case <-deadline:
+			return fmt.Errorf("timeout after %s: last error: %w", e.readinessTimeout, lastErr)
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 }
 
 func (e *E2EApp) Stop(ctx context.Context) error {
@@ -214,11 +285,18 @@ func BuildTestApp(builder *app.AppBuilder, testConfig *TestConfig) (*E2EApp, err
 		return nil, fmt.Errorf("failed to build test app: %w", err)
 	}
 
+	readinessTimeout := testConfig.ReadinessTimeout
+	if readinessTimeout == 0 {
+		readinessTimeout = 5 * time.Second
+	}
+
 	e2eApp := &E2EApp{
-		App:     builtApp,
-		Config:  cfg,
-		DB:      capturedDB,
-		AuthSvc: capturedAuthSvc,
+		App:              builtApp,
+		Config:           cfg,
+		DB:               capturedDB,
+		AuthSvc:          capturedAuthSvc,
+		readinessCheck:   testConfig.ReadinessCheck,
+		readinessTimeout: readinessTimeout,
 	}
 
 	if testConfig.EnableCoverage {
