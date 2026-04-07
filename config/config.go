@@ -60,6 +60,7 @@ type InertiaConfig struct {
 	SSREnabled  bool   `env:"SSR_ENABLED" envDefault:"false"`
 	SSRURL      string `env:"SSR_URL" envDefault:"http://127.0.0.1:13714"`
 	Development bool   `env:"DEVELOPMENT" envDefault:"false"`
+	ViteDevURL  string `env:"VITE_DEV_URL" envDefault:"http://localhost:5173"`
 }
 
 type DatabaseConfig struct {

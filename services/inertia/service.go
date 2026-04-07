@@ -125,6 +125,7 @@ func (s *Service) ShareAssetData() {
 	s.inertia.ShareTemplateData("cssAssets", cssAssets)
 	s.inertia.ShareTemplateData("jsAssets", jsAssets)
 	s.inertia.ShareTemplateData("isDevelopment", isDevelopment)
+	s.inertia.ShareTemplateData("viteDevURL", s.config.ViteDevURL)
 
 	if s.logger != nil {
 		s.logger.Debug("asset data shared successfully",
