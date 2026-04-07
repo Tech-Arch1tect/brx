@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/tech-arch1tect/brx/server"
 	"github.com/tech-arch1tect/brx/session"
 	"go.uber.org/fx"
 )
@@ -507,7 +508,7 @@ func TestAppBuilder_addError(t *testing.T) {
 }
 
 func TestSSLConfig(t *testing.T) {
-	sslConfig := &SSLConfig{
+	sslConfig := &server.SSLConfig{
 		Enabled:  true,
 		CertFile: "cert.pem",
 		KeyFile:  "key.pem",
