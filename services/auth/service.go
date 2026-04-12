@@ -543,15 +543,28 @@ func (s *Service) CompletePasswordReset(token, newPassword string) error {
 		return err
 	}
 
-	if s.sessionInvalidator != nil && s.db != nil {
+	if s.db != nil {
 		var userID uint
 		if err := s.db.Table("users").Select("id").Where("email = ?", resetToken.Email).Scan(&userID).Error; err == nil && userID != 0 {
-			if revokeErr := s.sessionInvalidator.RevokeAllUserSessions(userID); revokeErr != nil {
-				if s.logger != nil {
-					s.logger.Error("failed to revoke sessions after password reset",
-						zap.Error(revokeErr),
-						zap.String("email", resetToken.Email),
-						zap.Uint("user_id", userID))
+			if s.sessionInvalidator != nil {
+				if revokeErr := s.sessionInvalidator.RevokeAllUserSessions(userID); revokeErr != nil {
+					if s.logger != nil {
+						s.logger.Error("failed to revoke sessions after password reset",
+							zap.Error(revokeErr),
+							zap.String("email", resetToken.Email),
+							zap.Uint("user_id", userID))
+					}
+				}
+			}
+
+			if s.config.Auth.RememberMeEnabled {
+				if err := s.InvalidateRememberMeTokens(userID); err != nil {
+					if s.logger != nil {
+						s.logger.Error("failed to invalidate remember me tokens after password reset",
+							zap.Error(err),
+							zap.String("email", resetToken.Email),
+							zap.Uint("user_id", userID))
+					}
 				}
 			}
 		}
