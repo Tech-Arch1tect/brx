@@ -48,6 +48,8 @@ type SessionService interface {
 
 	RevokeAllOtherSessions(userID uint, currentToken string) error
 
+	RevokeAllUserSessions(userID uint) error
+
 	CleanupExpiredSessions() error
 
 	SessionExists(token string) (bool, error)

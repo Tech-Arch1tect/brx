@@ -40,11 +40,16 @@ type MailService interface {
 	SendTemplate(templateName string, to []string, subject string, data map[string]any) error
 }
 
+type SessionInvalidator interface {
+	RevokeAllUserSessions(userID uint) error
+}
+
 type Service struct {
-	config      *config.Config
-	db          *gorm.DB
-	mailService MailService
-	logger      *logging.Service
+	config             *config.Config
+	db                 *gorm.DB
+	mailService        MailService
+	sessionInvalidator SessionInvalidator
+	logger             *logging.Service
 }
 
 func NewService(cfg *config.Config, db *gorm.DB, logger *logging.Service) *Service {
@@ -60,6 +65,10 @@ func NewService(cfg *config.Config, db *gorm.DB, logger *logging.Service) *Servi
 
 func (s *Service) SetMailService(mailService MailService) {
 	s.mailService = mailService
+}
+
+func (s *Service) SetSessionInvalidator(si SessionInvalidator) {
+	s.sessionInvalidator = si
 }
 
 func NewServiceWithDefaults() *Service {
@@ -532,6 +541,20 @@ func (s *Service) CompletePasswordReset(token, newPassword string) error {
 
 	if err := s.ResetPassword(token, newPassword); err != nil {
 		return err
+	}
+
+	if s.sessionInvalidator != nil && s.db != nil {
+		var userID uint
+		if err := s.db.Table("users").Select("id").Where("email = ?", resetToken.Email).Scan(&userID).Error; err == nil && userID != 0 {
+			if revokeErr := s.sessionInvalidator.RevokeAllUserSessions(userID); revokeErr != nil {
+				if s.logger != nil {
+					s.logger.Error("failed to revoke sessions after password reset",
+						zap.Error(revokeErr),
+						zap.String("email", resetToken.Email),
+						zap.Uint("user_id", userID))
+				}
+			}
+		}
 	}
 
 	if err := s.SendPasswordResetSuccessEmail(resetToken.Email); err != nil {

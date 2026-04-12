@@ -3,6 +3,7 @@ package auth
 import (
 	"github.com/tech-arch1tect/brx/config"
 	"github.com/tech-arch1tect/brx/services/logging"
+	"github.com/tech-arch1tect/brx/session"
 	"go.uber.org/fx"
 	"gorm.io/gorm"
 )
@@ -22,6 +23,17 @@ func WireMailService(authSvc *Service, optMailSvc OptionalMailService) {
 	}
 }
 
+type OptionalSessionService struct {
+	fx.In
+	SessionService session.SessionService `optional:"true"`
+}
+
+func WireSessionInvalidator(authSvc *Service, opt OptionalSessionService) {
+	if authSvc != nil && opt.SessionService != nil {
+		authSvc.SetSessionInvalidator(opt.SessionService)
+	}
+}
+
 type OptionalDB struct {
 	fx.In
 	DB *gorm.DB `optional:"true"`
@@ -37,5 +49,6 @@ func MigratePasswordResetTokens(optDB OptionalDB, cfg *config.Config) error {
 var Module = fx.Options(
 	fx.Provide(ProvideAuthService),
 	fx.Invoke(WireMailService),
+	fx.Invoke(WireSessionInvalidator),
 	fx.Invoke(MigratePasswordResetTokens),
 )

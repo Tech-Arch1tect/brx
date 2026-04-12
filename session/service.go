@@ -415,6 +415,71 @@ func (s *sessionService) RevokeAllOtherSessions(userID uint, currentToken string
 	return nil
 }
 
+func (s *sessionService) RevokeAllUserSessions(userID uint) error {
+	if s.logger != nil {
+		s.logger.Info("revoking all sessions for user",
+			zap.Uint("user_id", userID))
+	}
+
+	var sessions []UserSession
+	if err := s.db.Where("user_id = ?", userID).Find(&sessions).Error; err != nil {
+		if s.logger != nil {
+			s.logger.Error("failed to find sessions to revoke",
+				zap.Error(err),
+				zap.Uint("user_id", userID))
+		}
+		return err
+	}
+
+	if len(sessions) == 0 {
+		if s.logger != nil {
+			s.logger.Debug("no sessions to revoke",
+				zap.Uint("user_id", userID))
+		}
+		return nil
+	}
+
+	for _, session := range sessions {
+		if session.Type == SessionTypeJWT && s.jwtRevocation != nil {
+			if session.AccessTokenJTI != "" {
+				_ = s.jwtRevocation.RevokeToken(session.AccessTokenJTI, session.ExpiresAt)
+			}
+		}
+
+		if session.Type == SessionTypeJWT && s.refreshRevocation != nil && session.RefreshTokenID != 0 {
+			_ = s.refreshRevocation.RevokeRefreshTokenByID(session.RefreshTokenID)
+		}
+
+		if session.Type == SessionTypeWeb && s.sessionManager != nil && s.sessionManager.SessionManager.Store != nil {
+			if err := s.sessionManager.SessionManager.Store.Delete(session.Token); err != nil {
+				if s.logger != nil {
+					s.logger.Error("failed to delete session from store",
+						zap.Error(err),
+						zap.Uint("session_id", session.ID))
+				}
+				return err
+			}
+		}
+	}
+
+	if err := s.db.Where("user_id = ?", userID).Delete(&UserSession{}).Error; err != nil {
+		if s.logger != nil {
+			s.logger.Error("failed to delete sessions from database",
+				zap.Error(err),
+				zap.Uint("user_id", userID))
+		}
+		return err
+	}
+
+	if s.logger != nil {
+		s.logger.Info("all user sessions revoked successfully",
+			zap.Uint("user_id", userID),
+			zap.Int("revoked_count", len(sessions)))
+	}
+
+	return nil
+}
+
 func (s *sessionService) CleanupExpiredSessions() error {
 	if s.logger != nil {
 		s.logger.Info("starting expired sessions cleanup")
