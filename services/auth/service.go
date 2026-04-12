@@ -416,12 +416,12 @@ func (s *Service) ResetPassword(token, newPassword string) error {
 		s.logger.Info("password reset requested")
 	}
 
-	resetToken, err := s.UsePasswordResetToken(token)
+	hashedPassword, err := s.HashPassword(newPassword)
 	if err != nil {
 		return err
 	}
 
-	hashedPassword, err := s.HashPassword(newPassword)
+	resetToken, err := s.UsePasswordResetToken(token)
 	if err != nil {
 		return err
 	}
